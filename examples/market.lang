@@ -1,0 +1,32 @@
+-- The market form (resolve-lang S3, O4, PLAN 4.6): a binary market and a
+-- market with three outcomes. Each branch of answers does an elim on its
+-- Unit field (the kernel has no Unit eta) and gives refl.
+market Rain :=
+  sources rainfall temp
+  outcomes Yes | No
+  deadline 1000u
+  rule fun (r : Rain.Reading) => flagIf (u256Le 50u (Rain.rainfall r)) Rain.Yes Rain.No
+  answers fun (o : Rain.Outcome) =>
+    elim (fun (x : Rain.Outcome) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) (inl v))) (pack (pair 60u 20u) refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) (inr v))) (pack (pair 10u 20u) refl) u) o
+
+-- Three outcomes: the inr case gets t : Sum Unit Unit and does one more elim.
+market Heat :=
+  sources degrees
+  outcomes Cold | Mild | Hot
+  deadline 2000u
+  rule fun (r : Heat.Reading) => flagIf (u256Le (Heat.degrees r) 10u) Heat.Cold (flagIf (u256Le (Heat.degrees r) 25u) Heat.Mild Heat.Hot)
+  answers fun (o : Heat.Outcome) =>
+    elim (fun (x : Heat.Outcome) => Sigma (r : Heat.Reading) (Path Heat.Outcome (Heat.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Heat.Reading) (Path Heat.Outcome (Heat.rule r) (inl v))) (pack 5u refl) u)
+      (fun (t : Sum Unit Unit) => elim (fun (y : Sum Unit Unit) => Sigma (r : Heat.Reading) (Path Heat.Outcome (Heat.rule r) (inr y)))
+        (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Heat.Reading) (Path Heat.Outcome (Heat.rule r) (inr (inl v)))) (pack 20u refl) u)
+        (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Heat.Reading) (Path Heat.Outcome (Heat.rule r) (inr (inr v)))) (pack 30u refl) u) t) o
+
+-- Eval rows (test/eval/expect.txt): only an entry takes arguments, so these
+-- definitions apply the rule to a reading and the answers to a label.
+def heatMild : Heat.Outcome := Heat.rule 20u
+def rainNo : Rain.Outcome := Rain.rule (pair 10u 20u)
+def heatHotReading : Heat.Reading := witness (Heat.answers Heat.Hot)
+def rainYesReading : Rain.Reading := witness (Rain.answers Rain.Yes)

@@ -34,8 +34,19 @@
   `examples/blocks.lang`, `test/run/blocks.script`, `test/run/blocks.out`,
   `test/lower/env-block.lang`, the run-2 fix of `test/evmchain.sh` and the
   b1 hunks of `docs/host/README.md`. The contract writer does not lower
-  `block` yet (`REFUSE_LOWER`; NUMBER is S7). The `market` form is a design
-  only (PLAN 4.6, Q-S3-1 to Q-S3-5 OPEN).
+  `block` yet (`REFUSE_LOWER`; NUMBER is S7). S3 s2 builds the `market` form.
+- S3 s2 (the `market` form, O4; Q-S3-1 to Q-S3-5 RULED (a)): a kit program
+  can declare `market M := sources ... outcomes L1 | ... | Lk deadline T
+  rule T answers T`. The lexer reads `market` as a keyword and `M.x` as one
+  name in a program. The parser needs the clauses in that order, one or
+  more sources and two or more outcomes (else `PARSE_EXPECT`). The checker
+  writes the form as the text of PLAN 4.6 (`M.Reading`, one selector for
+  each source, `M.Outcome`, the labels, `M.deadline`, `M.rule`,
+  `M.answers`) and checks each `def` as a program `def`. A guest market
+  gives `REFUSE_KIT`, a domain market `REFUSE_DATA`, a program `def` with a
+  `.` `REFUSE_NAME`, a missing branch `TYPE_MISMATCH` and a branch with the
+  wrong reading `PATH_END`. `examples/market.lang` has a binary market and a
+  market with three outcomes.
 
 ## Remaining M0 work
 

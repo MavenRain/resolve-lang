@@ -1,0 +1,10 @@
+-- A label equal to a source: the second M.Yes is REFUSE_NAME (PLAN 4.6).
+market M :=
+  sources Yes
+  outcomes Yes | No
+  deadline 1u
+  rule fun (r : M.Reading) => flagIf (u256Le 50u (M.Yes r)) M.Yes M.No
+  answers fun (o : M.Outcome) =>
+    elim (fun (x : M.Outcome) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) (inl v))) (pack 60u refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) (inr v))) (pack 10u refl) u) o

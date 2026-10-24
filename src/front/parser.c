@@ -3,7 +3,9 @@
               | 'axiom' NAME ':' term
               | 'family' NAME group* ':=' ctor ('|' ctor)*
               | 'event' NAME group*
-     ctor    := NAME group* ('[' cells ']')?
+              | 'market' NAME ':=' 'sources' NAME+ 'outcomes' NAME ('|' NAME)+
+                'deadline' term 'rule' term 'answers' term
+     ctor   := NAME group* ('[' cells ']')?
      group   := '(' NAME+ ':' term ')'
      term    := 'fun' (NAME | group)+ '=>' term
               | group ('->' | '*') term
@@ -30,6 +32,10 @@ typedef struct {
   const char *def;
   Origin origin;
   int depth;
+  /* The next clause word of a market (resolve-lang S3): outside brackets,
+     it ends an application after its head. NULL elsewhere. */
+  const char *stop;
+  int nested; /* the open brackets of the clause term */
 } Parser;
 
 /* One binder group: `(x y : A)` gives two names that share one type. */
@@ -128,6 +134,18 @@ static void *grow(Parser *p, void *items, size_t count, size_t *cap, size_t size
   return fresh;
 }
 
+/* The current token is the name WORD. */
+static int at_word(const Parser *p, const char *word) {
+  const Token *tok = cur(p);
+  size_t len = strlen(word);
+  return tok->kind == TOK_IDENT && tok->len == len && memcmp(tok->text, word, len) == 0;
+}
+
+/* The current token ends a market clause term. */
+static int at_stop(const Parser *p) {
+  return p->stop != NULL && p->nested == 0 && at_word(p, p->stop);
+}
+
 static int starts_atom(TokKind kind) {
   switch (kind) {
     case TOK_IDENT:
@@ -163,9 +181,18 @@ static int starts_atom(TokKind kind) {
     case TOK_KW_COFAMILY:
     case TOK_KW_SEALED:
     case TOK_KW_LAW:
+    case TOK_KW_MARKET:
       return 0;
   }
   return 0;
+}
+
+/* A term inside brackets: a market clause word is a name there. */
+static const Term *parse_nested(Parser *p) {
+  p->nested++;
+  const Term *term = parse_term(p);
+  p->nested--;
+  return term;
 }
 
 /* `(` NAME+ `:` starts a binder group. `(f x)` does not. */
@@ -190,7 +217,7 @@ static int parse_group(Parser *p, Binders *out) {
     if (out->names[i] == NULL) return 0;
   }
   if (!expect(p, TOK_COLON, "':'")) return 0;
-  out->type = parse_term(p);
+  out->type = parse_nested(p);
   return out->type != NULL && expect(p, TOK_RPAREN, "')'");
 }
 
@@ -226,7 +253,7 @@ static const Term *parse_join(Parser *p);
 static const Term *parse_branch(Parser *p) {
   const Token *tok = cur(p);
   const Term *key = parse_join(p);
-  const Term *body = key != NULL && expect(p, TOK_ARROW, "'->' after a key") ? parse_term(p) : NULL;
+  const Term *body = key != NULL && expect(p, TOK_ARROW, "'->' after a key") ? parse_nested(p) : NULL;
   Term *branch = body == NULL ? NULL : make_term(p, TERM_BRANCH, tok->line, tok->col);
   if (branch == NULL) return NULL;
   branch->left = key;
@@ -340,7 +367,7 @@ static const Term *parse_sigma(Parser *p) {
 
 static const Term *parse_paren(Parser *p) {
   bump(p);
-  const Term *inner = parse_term(p);
+  const Term *inner = parse_nested(p);
   return inner != NULL && expect(p, TOK_RPAREN, "')'") ? inner : NULL;
 }
 
@@ -402,6 +429,7 @@ static const Term *parse_atom(Parser *p) {
     case TOK_KW_COFAMILY:
     case TOK_KW_SEALED:
     case TOK_KW_LAW:
+    case TOK_KW_MARKET:
       break;
   }
   fail_at(p, tok, "a term");
@@ -410,7 +438,7 @@ static const Term *parse_atom(Parser *p) {
 
 static const Term *parse_app(Parser *p) {
   const Term *head = parse_atom(p);
-  while (head != NULL && starts_atom(cur(p)->kind)) {
+  while (head != NULL && starts_atom(cur(p)->kind) && !at_stop(p)) {
     const Term *arg = parse_atom(p);
     Term *app = arg == NULL ? NULL : make_term(p, TERM_APP, head->line, head->col);
     if (app == NULL) return NULL;
@@ -613,6 +641,85 @@ static int parse_and(Parser *p, Decl *d) {
   return parse_family(p, d);
 }
 
+static int expect_word(Parser *p, const char *word, const char *what) {
+  if (!at_word(p, word)) return fail_at(p, cur(p), what);
+  bump(p);
+  return 1;
+}
+
+/* The term of a market clause, up to the clause word STOP (NULL for the
+   last clause), and its source text. */
+static int parse_clause(Parser *p, const char *stop, Span *out) {
+  const Token *first = cur(p);
+  p->stop = stop;
+  const Term *term = parse_term(p);
+  p->stop = NULL;
+  if (term == NULL) return 0;
+  const Token *last = &p->toks[p->pos - 1];
+  out->text = first->text;
+  out->len = (size_t)(last->text + last->len - first->text);
+  return 1;
+}
+
+/* `market NAME := sources NAME+ outcomes NAME ('|' NAME)+ deadline t rule t
+   answers t` (resolve-lang S3, O4, PLAN 4.6). The clauses come in this
+   order; a missing clause, no source or one outcome is PARSE_EXPECT
+   (Q-S3-3 (a)). The clause words are names, as `history` is. */
+static int parse_market(Parser *p, Decl *d) {
+  Field *sources = NULL;
+  Ctor *labels = NULL;
+  size_t count = 0;
+  size_t cap = 0;
+  bump(p);
+  d->kind = DECL_MARKET;
+  d->is_rec = 0;
+  d->type = NULL;
+  d->body = NULL;
+  d->index = NULL;
+  d->name = take_name(p, "a market name");
+  if (d->name == NULL) return 0;
+  p->def = d->name;
+  if (!expect(p, TOK_DEFINE, "':='") || !expect_word(p, "sources", "'sources'")) return 0;
+  /* The delimiter precedes a label and '|'. An earlier `outcomes` is a
+     source name, including when it is the only source. */
+  while (at(p, TOK_IDENT) && !(at_word(p, "outcomes") && peek_at(p, 2)->kind == TOK_BAR)) {
+    sources = grow(p, sources, count, &cap, sizeof *sources);
+    if (sources == NULL) return 0;
+    sources[count].line = cur(p)->line;
+    sources[count].col = cur(p)->col;
+    sources[count].type = NULL;
+    sources[count].history = 0;
+    sources[count].name = take_name(p, "a source name");
+    if (sources[count].name == NULL) return 0;
+    count++;
+  }
+  if (count == 0) return fail_at(p, cur(p), "a source name");
+  d->params = sources;
+  d->param_count = count;
+  if (!expect_word(p, "outcomes", "'outcomes'")) return 0;
+  count = 0;
+  cap = 0;
+  do {
+    labels = grow(p, labels, count, &cap, sizeof *labels);
+    if (labels == NULL) return 0;
+    labels[count].line = cur(p)->line;
+    labels[count].col = cur(p)->col;
+    labels[count].fields = NULL;
+    labels[count].field_count = 0;
+    labels[count].result = NULL;
+    labels[count].boundary = NULL;
+    labels[count].name = take_name(p, "an outcome label");
+    if (labels[count].name == NULL) return 0;
+    count++;
+  } while (eat(p, TOK_BAR));
+  if (count < 2u) return fail_at(p, cur(p), "'|' and a second outcome");
+  d->ctors = labels;
+  d->ctor_count = count;
+  return expect_word(p, "deadline", "'deadline'") && parse_clause(p, "rule", &d->clauses[0])
+      && expect_word(p, "rule", "'rule'") && parse_clause(p, "answers", &d->clauses[1])
+      && expect_word(p, "answers", "'answers'") && parse_clause(p, NULL, &d->clauses[2]);
+}
+
 static int parse_decl(Parser *p, Decl *d) {
   const Token *tok = cur(p);
   p->def = NULL;
@@ -640,6 +747,7 @@ static int parse_decl(Parser *p, Decl *d) {
     case TOK_KW_STATE:
     case TOK_KW_COFAMILY: return parse_family(p, d);
     case TOK_KW_EVENT: return parse_event(p, d);
+    case TOK_KW_MARKET: return parse_market(p, d);
     case TOK_EOF:
     case TOK_IDENT:
     case TOK_NAT:
@@ -666,7 +774,7 @@ static int parse_decl(Parser *p, Decl *d) {
     case TOK_KW_AND:
       break;
   }
-  return fail_at(p, tok, "'def', 'axiom', 'family', 'cofamily', 'state', 'event', 'sealed' or 'law'");
+  return fail_at(p, tok, "'def', 'axiom', 'family', 'cofamily', 'state', 'event', 'sealed', 'law' or 'market'");
 }
 
 int parse_source(Arena *arena, const char *source, Origin origin, const TokenList *toks, DeclList *list, Diag *diag) {

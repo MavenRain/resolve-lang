@@ -65,6 +65,27 @@ static int guest(const char *text, const char *want) {
   return checked(text, ORIGIN_PROGRAM, CHECK_GUEST, want);
 }
 
+/* Contextual market words remain usable as source and term names. The
+   witnesses also check the selectors at each position of a product. */
+static int market_names(const char *sources, const char *selector,
+                        const char *yes, const char *no, int contextual) {
+  char text[2048];
+  snprintf(text, sizeof text,
+    "def rule : U256 := 1u\n"
+    "def answers : (A : Type 0) -> A -> A := fun A a => a\n"
+    "market M := sources %s outcomes Yes | No\n"
+    "  deadline %s\n"
+    "  rule %sfun (r : M.Reading) => flagIf (u256Le 50u (M.%s r)) M.Yes M.No%s\n"
+    "  answers fun (o : M.Outcome) =>\n"
+    "    elim (fun (x : M.Outcome) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) x))\n"
+    "      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) (inl v))) (pack (%s) refl) u)\n"
+    "      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) (inr v))) (pack (%s) refl) u) o",
+    sources, contextual ? "rule" : "1u",
+    contextual ? "answers (M.Reading -> M.Outcome) (" : "",
+    selector, contextual ? ")" : "", yes, no);
+  return checked(text, ORIGIN_PROGRAM, CHECK_KIT, NULL);
+}
+
 static int normal_roundtrip_in(const char *domain_text, const char *type, const char *body) {
   char source[4096];
   char normal[2048];
@@ -596,6 +617,16 @@ int main(void) {
                "def brLaw : Path Lab (brHere Lab (brNext Lab brAll l1)) l1 := refl", NULL);
   ok &= normal_roundtrip("Nat -> (A : Type 0) -> A -> A",
     "fun (i0 : Nat) (A : Type 0) (a : A) => transp (fun (i : I) => A) (~i1) a");
+  /* The market form (resolve-lang S3, PLAN 4.6, Q-S3-1 (a)): a market in the
+     domain is REFUSE_DATA. Only a program lexes `M.x` as one name, so the
+     clause terms of this row have no dot. */
+  ok &= domain("market M :=\n  sources s\n  outcomes Yes | No\n  deadline 1u\n"
+               "  rule unit\n  answers unit", "REFUSE_DATA");
+  ok &= market_names("outcomes", "outcomes", "60u", "10u", 0);
+  ok &= market_names("outcomes b c", "outcomes", "pair 60u (pair 2u 3u)", "pair 10u (pair 2u 3u)", 0);
+  ok &= market_names("a outcomes c", "outcomes", "pair 1u (pair 60u 3u)", "pair 1u (pair 10u 3u)", 0);
+  ok &= market_names("a b outcomes", "outcomes", "pair 1u (pair 2u 60u)", "pair 1u (pair 2u 10u)", 0);
+  ok &= market_names("s", "s", "60u", "10u", 1);
   /* Guest mode (orbit-lang S3): a program with no kit name checks, and a Nat
      literal is a kit item. The second row passes in kit mode only if the mode
      is wrong. */

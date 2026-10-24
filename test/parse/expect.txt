@@ -17,3 +17,4 @@ irrelevant-dot.lang LEX_CHAR
 irrelevant-brace.lang LEX_CHAR
 irrelevant-at.lang PARSE_EXPECT
 irrelevant-attr.lang LEX_CHAR
+market-no-answers.lang PARSE_EXPECT

@@ -1,0 +1,11 @@
+-- The branch of No gives a reading that the rule maps to Yes: PATH_END
+-- (PLAN 4.6, Q-S3-5 (a)).
+market M :=
+  sources s
+  outcomes Yes | No
+  deadline 1u
+  rule fun (r : M.Reading) => flagIf (u256Le 50u (M.s r)) M.Yes M.No
+  answers fun (o : M.Outcome) =>
+    elim (fun (x : M.Outcome) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) (inl v))) (pack 60u refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) (inr v))) (pack 70u refl) u) o

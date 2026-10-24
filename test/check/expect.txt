@@ -184,3 +184,8 @@ open-leak.lang REFUSE_LAW
 quorum-state.lang REFUSE_STATE
 zk-leak.lang REFUSE_LAW
 transcript-state.lang REFUSE_STATE
+market-missing-branch.lang TYPE_MISMATCH
+market-unanswerable.lang PATH_END
+market-dotted-def.lang REFUSE_NAME
+market-label-source.lang REFUSE_NAME
+market-guest.lang REFUSE_KIT

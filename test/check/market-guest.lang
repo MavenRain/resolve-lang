@@ -1,0 +1,11 @@
+-- A market in a guest program: REFUSE_KIT at the U256 of M.Reading (PLAN 4.6,
+-- Q-S3-1 (a)). The kit mode accepts it.
+market M :=
+  sources s
+  outcomes Yes | No
+  deadline 1u
+  rule fun (r : M.Reading) => flagIf (u256Le 50u (M.s r)) M.Yes M.No
+  answers fun (o : M.Outcome) =>
+    elim (fun (x : M.Outcome) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) (inl v))) (pack 60u refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) (inr v))) (pack 10u refl) u) o

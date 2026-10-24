@@ -66,8 +66,19 @@ typedef enum {
   DECL_DEF,    /* def [rec] name : type := body */
   DECL_AXIOM,  /* axiom name : type */
   DECL_FAMILY, /* family name params [: index] := ctor | ... [and ...] */
-  DECL_COFAMILY /* cofamily name params := corec field* (S4): elaborated */
+  DECL_COFAMILY, /* cofamily name params := corec field* (S4): elaborated */
+  /* market name := sources ... outcomes ... deadline t rule t answers t
+     (resolve-lang S3, O4): elaborated. The params are the sources, the
+     ctors are the outcome labels. */
+  DECL_MARKET
 } DeclKind;
+
+/* The source text of a term (resolve-lang S3): the market form copies it
+   into the text of its definitions. */
+typedef struct {
+  const char *text;
+  size_t len;
+} Span;
 
 /* A family is legal only in the domain file (rule R1). ORIGIN_KIT is the
    contract prelude (orbit-lang S3): trusted as domain text, and its names
@@ -103,6 +114,8 @@ typedef struct {
      one. */
   size_t block_first;
   size_t block_count;
+  /* A market (resolve-lang S3): the deadline, rule and answers terms. */
+  Span clauses[3];
 } Decl;
 
 /* Domain declarations come first, then the program. */

@@ -4512,6 +4512,83 @@ static int check_cofamily(Checker *c, const Decl *d) {
   return 1;
 }
 
+/* The text of the market D (resolve-lang S3, PLAN 4.6), in the order of
+   the table there: M.Reading, M.si, M.Outcome, M.Lj, M.deadline, M.rule,
+   M.answers. */
+static void market_text(Text *t, const Decl *d) {
+  const char *mn = d->name;
+  size_t n = d->param_count;
+  size_t k = d->ctor_count;
+  size_t i;
+  size_t j;
+  text_add(t, "def %s.Reading : Type 0 :=", mn);
+  for (i = 1; i < n; i++)
+    text_add(t, i + 1u < n ? " Prod U256 (" : " Prod U256");
+  text_add(t, " U256");
+  for (i = 2; i < n; i++)
+    text_add(t, ")");
+  text_add(t, "\n");
+  for (i = 0; i < n; i++) {
+    text_add(t, "def %s.%s : %s.Reading -> U256 := fun (r : %s.Reading) =>", mn, d->params[i].name, mn, mn);
+    text_add(t, i + 1u < n ? " first (" : " (");
+    for (j = 0; j < i; j++)
+      text_add(t, "second (");
+    text_add(t, "r");
+    for (j = 0; j < i; j++)
+      text_add(t, ")");
+    text_add(t, ")\n");
+  }
+  text_add(t, "def %s.Outcome : Type 0 :=", mn);
+  for (i = 1; i < k; i++)
+    text_add(t, i + 1u < k ? " Sum Unit (" : " Sum Unit");
+  text_add(t, " Unit");
+  for (i = 2; i < k; i++)
+    text_add(t, ")");
+  text_add(t, "\n");
+  for (j = 0; j < k; j++) {
+    text_add(t, "def %s.%s : %s.Outcome :=", mn, d->ctors[j].name, mn);
+    for (i = 0; i < j; i++)
+      text_add(t, " inr (");
+    text_add(t, j + 1u < k ? " inl unit" : " unit");
+    for (i = 0; i < j; i++)
+      text_add(t, ")");
+    text_add(t, "\n");
+  }
+  text_add(t, "def %s.deadline : U256 := %.*s\n", mn, (int)d->clauses[0].len, d->clauses[0].text);
+  text_add(t, "def %s.rule : %s.Reading -> %s.Outcome := %.*s\n", mn, mn, mn, (int)d->clauses[1].len, d->clauses[1].text);
+  text_add(t, "def %s.answers : (o : %s.Outcome) -> Sigma (r : %s.Reading) (Path %s.Outcome (%s.rule r) o) := %.*s\n",
+           mn, mn, mn, mn, mn, (int)d->clauses[2].len, d->clauses[2].text);
+}
+
+/* A market (resolve-lang S3, O4): the generated text, lexed with `.` as a
+   name character and checked as program definitions. A guest market gets
+   REFUSE_KIT from the U256 of M.Reading (Q-S3-1 (a)). */
+static int check_market(Checker *c, const Decl *d) {
+  Machine *m = c->m;
+  size_t size = strlen(d->name) + 8u;
+  char *source = arena_alloc(m->arena, size);
+  Text t = {NULL, 0, 0};
+  TokenList toks = {0};
+  DeclList list = {NULL, 0, 0};
+  size_t i;
+  if (source == NULL)
+    return FAIL(c, "OOM", "out of memory");
+  snprintf(source, size, "market %s", d->name);
+  market_text(&t, d);
+  t.cap = t.len + 1u;
+  t.len = 0;
+  t.text = arena_alloc(m->arena, t.cap);
+  if (t.text == NULL)
+    return FAIL(c, "OOM", "out of memory");
+  market_text(&t, d);
+  if (!lex_internal(m->arena, source, t.text, t.len, &toks, m->diag) || !parse_source(m->arena, source, ORIGIN_PROGRAM, &toks, &list, m->diag))
+    return 0;
+  for (i = 0; i < list.count; i++)
+    if (!check_generated(c, &list.items[i]))
+      return 0;
+  return 1;
+}
+
 static int check_decl(Checker *c, const Decl *d) {
   if ((d->is_event || d->is_state) && guest(c))
     return kit_refused(c, d->is_state ? "the state form" : "an event");
@@ -4529,6 +4606,14 @@ static int check_decl(Checker *c, const Decl *d) {
     return FAIL(c, "REFUSE_AXIOM", "an axiom has no proof (rule R2)");
   if (d->is_rec)
     return FAIL(c, "REFUSE_REC", "def rec is refused (rule R3); use fold or unfold");
+  /* The market form (resolve-lang S3, Q-S3-1 (a), Q-S3-2 (a)): a program
+     form, and only it makes a name with a `.`. */
+  if (d->kind == DECL_MARKET && d->origin != ORIGIN_PROGRAM)
+    return FAIL(c, "REFUSE_DATA", "only a program can declare a market (O4); domain/domain.lang cannot");
+  if (d->kind == DECL_MARKET)
+    return check_market(c, d);
+  if (d->origin == ORIGIN_PROGRAM && strchr(d->name, '.') != NULL)
+    return FAIL(c, "REFUSE_NAME", "%s has a '.'; only the market form makes such a name (O4)", d->name);
   if (!kernel_sig(c, d) || !name_free(c, d->name))
     return 0;
   switch (d->kind) {
@@ -4538,6 +4623,7 @@ static int check_decl(Checker *c, const Decl *d) {
     return check_cofamily(c, d);
   case DECL_DEF:
   case DECL_AXIOM:
+  case DECL_MARKET:
     break;
   }
   return check_def(c, d);
@@ -4559,6 +4645,9 @@ int check_program(Arena *arena, const DeclList *decls, Machine *m, Diag *diag, C
     int cofamily = decls->items[i].kind == DECL_COFAMILY;
     ctors += decls->items[i].ctor_count + (cofamily ? fields + 1u : 0u);
     extra += cofamily ? 2u * fields + 8u : 0u;
+    /* A market with n sources and k outcomes elaborates to n + k + 5
+       definitions (resolve-lang S3). */
+    extra += decls->items[i].kind == DECL_MARKET ? decls->items[i].param_count + decls->items[i].ctor_count + 5u : 0u;
   }
   m->defs = arena_alloc(arena, (decls->count + extra + 1u) * sizeof *m->defs);
   m->families = arena_alloc(arena, (decls->count + extra + 1u) * sizeof *m->families);

@@ -1,0 +1,3 @@
+-- Only the market form makes a name with a dot: a program def whose name has
+-- a dot is REFUSE_NAME (PLAN 4.6, Q-S3-2 (a)).
+def A.b : U256 := 1u

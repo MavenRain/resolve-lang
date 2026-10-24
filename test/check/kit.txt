@@ -92,3 +92,7 @@ cofamily-state.lang
 enc-state.lang
 quorum-state.lang
 transcript-state.lang
+market-missing-branch.lang
+market-unanswerable.lang
+market-dotted-def.lang
+market-label-source.lang

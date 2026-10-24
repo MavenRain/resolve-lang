@@ -1,0 +1,6 @@
+-- A market with no answers clause: PARSE_EXPECT (PLAN 4.6, Q-S3-3 (a)).
+market M :=
+  sources s
+  outcomes Yes | No
+  deadline 1u
+  rule fun (r : M.Reading) => flagIf (u256Le 50u (M.s r)) M.Yes M.No

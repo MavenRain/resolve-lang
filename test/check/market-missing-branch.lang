@@ -1,0 +1,9 @@
+-- A market whose answers has no branch for No: TYPE_MISMATCH (PLAN 4.6, O8).
+market M :=
+  sources s
+  outcomes Yes | No
+  deadline 1u
+  rule fun (r : M.Reading) => flagIf (u256Le 50u (M.s r)) M.Yes M.No
+  answers fun (o : M.Outcome) =>
+    elim (fun (x : M.Outcome) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : M.Reading) (Path M.Outcome (M.rule r) (inl v))) (pack 60u refl) u) o
