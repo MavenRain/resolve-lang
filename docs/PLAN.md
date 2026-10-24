@@ -335,6 +335,29 @@ does not fit (its KEPT rule keeps the seed files). After the copy:
   186, kit-only refusals 22, evals 188, precompile 143 steps, emit 24, every
   regression line passed (`~/Documents/intent-lang-S7-b5-gate.log`).
 
+S2 (DONE, 2026-10-24): the port is `git -C intent-lang archive ef5abe8 src
+domain examples test gen Makefile | tar -x`, then `git archive ef5abe8` of
+SPEC.md, docs/host/README.md, docs/VALIDATION.md, formers/FORMERS.md,
+formers/tcc-evm-contract.md and probe/CAPABILITY.md. The seed keeps
+design/, docs/PLAN.md, README.md and LICENSE-*. docs/STATUS.md keeps the
+seed text and gets an S2 item with the list of name edits. After the copy,
+the code is the ef5abe8 code byte for byte (`diff -rq`). Surprises:
+
+- The seed has two files that ef5abe8 does not have:
+  `examples/inventory.lang` and `test/check/domain-name.lang`. The archive
+  does not remove them, so S2 removes them (`git rm`), as intent-lang S2
+  did. They are seed files, not ported code, so "nothing is removed" above
+  still holds for the port.
+- There are four name edits, the same four sites as in intent-lang S2:
+  SPEC.md lines 1, 3 and 14, and docs/host/README.md line 3. The other
+  `intent-lang` words in the ported files are provenance: the comment at
+  src/front/front.c:12, and the evidence paths
+  `~/Documents/intent-lang-work/...` in docs/VALIDATION.md (lines 315 and
+  373), test/secptool.c:3 and test/precompile.sh:144.
+- The gate log `~/Documents/resolve-lang-S2-gate.log` is byte for byte the
+  intent-lang S7 log (110 lines). No name edit is in a file that the gate
+  reads.
+
 ## 7. The contract
 
 One contract for each program. The markets of the program are a closed
@@ -378,8 +401,8 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 |---|---|---|
 | S0 | generate from lang-template (tcc-evm-contract); DESIGN verbatim; this plan; README; kit gate | DONE |
 | S1 | USER rules Q1-Q10; this plan records the rulings | DONE |
-| S2 | port intent-lang ef5abe8 (section 6); gate = the intent-lang S7 counters | NEXT |
-| S3 | `Env.block` in the guest (O5); the `market` form (O4): `Reading`, `Outcome`, labels, `rule`, `answers`, `deadline`; rows of 4.2 | |
+| S2 | port intent-lang ef5abe8 (section 6); gate = the intent-lang S7 counters | DONE: `make -B check` EXIT 0 with the intent-lang S7 counters: 49 examples, 0 failed; 19 parse, 186 check and 22 kit-only refusals; 188 evals, 2 proves; contracts 2 written and 5 refused; rings 6 built and 2 refused; 28 guest and 14 host differential rows; 5 runs, 10 run refusals; 8 asmtool; 3 builds, 16 lower refusals, 33 build checks; 20 dispatch; 43 evm steps; 14 precompile rows and 143 steps; 13 mock rows; 15 diff rows; 24 emit regressions; the 13 "regressions: passed" lines; 0 failures. The log is byte for byte the intent-lang S7 log (section 6) |
+| S3 | `Env.block` in the guest (O5); the `market` form (O4): `Reading`, `Outcome`, labels, `rule`, `answers`, `deadline`; rows of 4.2 | NEXT |
 | S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | |
 | S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | |
 | S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | |
