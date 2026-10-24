@@ -47,8 +47,8 @@ chain() {
     _k=$((_k + 1))
     awk -v k="$_k" 'NR <= k' "$tmp/calls" >"$tmp/prefix"
     set -- $(awk -v k="$_k" 'NR == k' "$tmp/calls")
-    _now=$1 _caller=$2 _name=$3
-    shift 3
+    _now=$1 _block=$2 _caller=$3 _name=$4
+    shift 4
     steps=$((steps + 1))
     if ! build/langc --kit run "$_prog" "$tmp/prefix" >"$tmp/run" 2>"$tmp/err"; then
       echo "FAIL evm $_script:$_k: langc run: $(head -n 1 "$tmp/err")"
@@ -65,7 +65,7 @@ chain() {
     esac
     want "$(awk '$1 == "state" { sub(/^state /, ""); print }' "$tmp/run")"
     _input=$(input "$_prog" "$_name" "$@")
-    if ! step "$_now" "$_caller" "$_input"; then
+    if ! step "$_now" "$_block" "$_caller" "$_input"; then
       echo "FAIL evm $_script:$_k $_name: evm: $(head -n 1 "$tmp/dump")"
       fail=$((fail + 1))
       return

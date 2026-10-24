@@ -123,7 +123,8 @@ slots() {
 }
 
 # genesis TIME ALLOC: tmp/pre.json gets a prestate at TIMESTAMP TIME with the
-# alloc entries ALLOC.
+# alloc entries ALLOC. The prestate has no block number: `evm run` (1.14)
+# refuses a genesis with number > 0 (S8, O17).
 genesis() {
   printf '{"config":%s,"timestamp":"0x%x","gasLimit":"0x1c9c380","difficulty":"0x0","alloc":{%s}}\n' \
     "$config" "$1" "$2" >"$tmp/pre.json"
@@ -140,8 +141,10 @@ deploy() {
   slots "$tmp/dump"
 }
 
-# step NOW CALLER INPUT: call the receiver (the code in tmp/code, the storage
-# in tmp/raw) from CALLER with INPUT at TIMESTAMP NOW. result gets ok, revert,
+# step NOW BLOCK CALLER INPUT: call the receiver (the code in tmp/code, the
+# storage in tmp/raw) from CALLER with INPUT at TIMESTAMP NOW. BLOCK (the
+# `langc run` column, O17) is not in the prestate: NUMBER stays 0, and no
+# program lowers a read of it before S10. result gets ok, revert,
 # trap (the Trap() selector), error, `revert HEX` or `out HEX`. tmp/raw and
 # tmp/got get the storage after the call. A set alloc (`,"0xADDR":{...}`)
 # adds accounts to the prestate (test/diff.sh: the mock token); then tmp/raw
@@ -149,7 +152,7 @@ deploy() {
 step() {
   _st=$(awk '{ printf "%s\"0x%s\":\"0x%s\"", (NR > 1 ? "," : ""), $1, $2 }' "$tmp/raw")
   genesis "$1" "\"0x$receiver\":{\"balance\":\"0x0\",\"code\":\"0x$(cat "$tmp/code")\",\"storage\":{$_st}}${alloc:-}"
-  evm run --prestate "$tmp/pre.json" --receiver "0x$receiver" --sender "$2" --input "$3" \
+  evm run --prestate "$tmp/pre.json" --receiver "0x$receiver" --sender "$3" --input "$4" \
     --dump >"$tmp/dump" 2>&1 || return 1
   result=$(awk '
     /^0x[0-9a-f]*$/ { o = $0 }

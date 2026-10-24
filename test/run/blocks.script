@@ -1,0 +1,3 @@
+-- A call script for examples/blocks.lang (slice S8, O17). BLOCK (7u) is not
+-- NOW (100): the state gets the block number.
+100 7u 0x00000000000000000000000000000000000000bb stamp

@@ -4893,37 +4893,41 @@ static int print_value(Machine *m, const Value *v, char *buf) {
   return value_print(m, NULL, 0, v, buf, PRINT_MAX) ? 1 : diag_fail(m->diag, "EVAL_PRINT", m->def, "the normal form exceeds the printer limits");
 }
 
-static const Value *make_env(Machine *m, const Run *r, uint64_t now, const U256 *caller) {
-  const Value **args = arena_alloc(m->arena, 2u * sizeof *args);
+static const Value *make_env(Machine *m, const Run *r, uint64_t now, const U256 *block, const U256 *caller) {
+  const Value **args = arena_alloc(m->arena, 3u * sizeof *args);
   if (args == NULL) {
     diag_fail(m->diag, "OOM", m->def, "out of memory");
     return NULL;
   }
   args[0] = val_nat(m, now);
-  args[1] = val_word(m, WORD_ADDR, caller);
-  return args[0] == NULL || args[1] == NULL ? NULL : val_op(m, VAL_OP, OP_CTOR, m->families[r->env].first_ctor, 0, args, 2u);
+  args[1] = val_word(m, WORD_U256, block);
+  args[2] = val_word(m, WORD_ADDR, caller);
+  return args[0] == NULL || args[1] == NULL || args[2] == NULL ? NULL : val_op(m, VAL_OP, OP_CTOR, m->families[r->env].first_ctor, 0, args, 3u);
 }
 
-/* One call `NOW CALLER NAME ARGS...` (D-6 to D-8). A trap is a revert: the
+/* One call `NOW BLOCK CALLER NAME ARGS...` (D-6 to D-8, O17). A trap is a revert: the
    state does not change. Returns 0, 1, or 2 after EVAL_ARGS. */
 static int run_call(Machine *m, Run *r, uint32_t line, char *const *word, uint32_t count, FILE *out) {
   const Value *args[ENTRY_PARAMS_MAX];
+  U256 *block = arena_alloc(m->arena, sizeof *block);
   U256 *caller = arena_alloc(m->arena, sizeof *caller);
-  const char *name = count > 2u ? word[2] : "";
+  const char *name = count > 3u ? word[3] : "";
   uint64_t now = 0;
-  uint32_t d = count > 2u ? find_def(m, name) : NO_DEF;
+  uint32_t d = count > 3u ? find_def(m, name) : NO_DEF;
   RunCall call;
   Role role;
   const Value *v;
   uint32_t i;
-  if (caller == NULL)
+  if (block == NULL || caller == NULL)
     return diag_fail(m->diag, "OOM", NULL, "out of memory") + 1;
-  if (count < 3u)
-    return diag_fail(m->diag, "RUN_SCRIPT", NULL, "%s:%u: a call is NOW CALLER NAME ARGS...", r->path, line) + 1;
+  if (count < 4u)
+    return diag_fail(m->diag, "RUN_SCRIPT", NULL, "%s:%u: a call is NOW BLOCK CALLER NAME ARGS...", r->path, line) + 1;
   if (!parse_u64(word[0], &now))
     return diag_fail(m->diag, "RUN_SCRIPT", NULL, "%s:%u: NOW '%s' is not a Nat", r->path, line, word[0]) + 1;
-  if (!parse_word(word[1], WORD_ADDR, caller))
-    return diag_fail(m->diag, "RUN_SCRIPT", NULL, "%s:%u: CALLER '%s' is not an Addr (0x and 40 hex digits)", r->path, line, word[1]) + 1;
+  if (!parse_word(word[1], WORD_U256, block))
+    return diag_fail(m->diag, "RUN_SCRIPT", NULL, "%s:%u: BLOCK '%s' is not a U256 (for example 100u)", r->path, line, word[1]) + 1;
+  if (!parse_word(word[2], WORD_ADDR, caller))
+    return diag_fail(m->diag, "RUN_SCRIPT", NULL, "%s:%u: CALLER '%s' is not an Addr (0x and 40 hex digits)", r->path, line, word[2]) + 1;
   m->fuel = EVAL_FUEL_STEPS;
   m->def = name;
   if (d == NO_DEF)
@@ -4931,14 +4935,14 @@ static int run_call(Machine *m, Run *r, uint32_t line, char *const *word, uint32
   role = role_of(m, r, m->defs[d].type, &call);
   if (role == ROLE_HELPER)
     return diag_fail(m->diag, "EVAL_ENTRY", name, "%s:%u: a helper is not an entry or a view", r->path, line) + 1;
-  if (count - 3u != call.param_count)
-    return diag_fail(m->diag, "EVAL_ARGS", name, "%s:%u: the call takes %u arguments, found %u", r->path, line, call.param_count, count - 3u) + 2;
+  if (count - 4u != call.param_count)
+    return diag_fail(m->diag, "EVAL_ARGS", name, "%s:%u: the call takes %u arguments, found %u", r->path, line, call.param_count, count - 4u) + 2;
   for (i = 0; i < call.param_count; i++) {
-    args[i] = entry_arg(m, word[i + 3u], call.params[i]);
+    args[i] = entry_arg(m, word[i + 4u], call.params[i]);
     if (args[i] == NULL)
       return strcmp(m->diag->code != NULL ? m->diag->code : "", "EVAL_ARGS") == 0 ? 2 : 1;
   }
-  v = apply_value(m, apply_value(m, def_value(m, d), make_env(m, r, now, caller)), r->state);
+  v = apply_value(m, apply_value(m, def_value(m, d), make_env(m, r, now, block, caller)), r->state);
   for (i = 0; i < call.param_count; i++)
     v = apply_value(m, v, args[i]);
   if (v == NULL)
@@ -4990,7 +4994,7 @@ static uint32_t split_words(char *line, char **word, uint32_t cap) {
 }
 
 int run_command(Machine *m, const char *path, const char *text, size_t len, FILE *out) {
-  char *word[ENTRY_PARAMS_MAX + 3u];
+  char *word[ENTRY_PARAMS_MAX + 4u];
   uint32_t init = find_def(m, "init");
   uint32_t line = 0;
   size_t pos = 0;
@@ -5026,7 +5030,7 @@ int run_command(Machine *m, const char *path, const char *text, size_t len, FILE
     memcpy(copy, text + pos, end - pos);
     copy[end - pos] = '\0';
     line++;
-    count = split_words(copy, word, ENTRY_PARAMS_MAX + 3u);
+    count = split_words(copy, word, ENTRY_PARAMS_MAX + 4u);
     if (count != 0u && strncmp(word[0], "--", 2) != 0)
       status = run_call(m, &r, line, word, count, out);
     pos = end + 1u;

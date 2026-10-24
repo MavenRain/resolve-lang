@@ -111,8 +111,8 @@ gives the bullet, the minimum and the reading.
 Part D is the DAO of intent-lang (P 3.1 and 3.4). It comes with the S2 port.
 The S2 port changes no name.
 
-- Kit base data: `U256`, `Addr`, `Env` (`now`, `caller`), `Out` (`pay`,
-  `pull`, `emit`), the contract state.
+- Kit base data: `U256`, `Addr`, `Env` (`now`, `block`, `caller`), `Out`
+  (`pay`, `pull`, `emit`), the contract state. S3 b1 adds `block` (O5).
 - Slots: `Member`, `Choice`, `Group`, `Decision` (one value of `Params`).
 - Defined: `Config`, `Orbit` (= `Config / act`), `Constitution`,
   `Aggregation`, `Tally`, `act`, `orbitProj`, `aggregate`, `gov`, `amend`.
@@ -302,6 +302,88 @@ Sigma verifiers by Fiat-Shamir (keccak), bLSAG membership. New: the masked
 ring (4.3), the key image for each dispute (O10), `Env.block` lowered to
 NUMBER 0x43 (O5).
 
+### 4.6 The market form
+
+S3 s1 (2026-10-24) writes this design. Q-S3-1 to Q-S3-5 (section 11) are
+OPEN. Each choice below is the recommendation (a). The probes ran
+`build/langc check` (the S3 b1 build) on the guest files p1 to p9 in
+`~/Documents/resolve-lang-work/S3-probes/`.
+
+Surface: one top-level form. The clauses come in this order, one time each.
+
+```
+market Rain :=
+  sources rainfall temp
+  outcomes Yes | No
+  deadline 1000u
+  rule fun (r : Rain.Reading) => flagIf (u256Le 50u (Rain.rainfall r)) Rain.Yes Rain.No
+  answers fun (o : Rain.Outcome) =>
+    elim (fun (x : Rain.Outcome) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) (inl v))) (pack (pair 60u 20u) refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) (inr v))) (pack (pair 10u 20u) refl) u) o
+```
+
+- `sources s1 ... sn`: one or more names. Each source is a `U256` (3.2). A
+  source can have any name (O9).
+- `outcomes L1 | ... | Lk`: two or more labels.
+- `deadline t`: `t : U256`, a block number (O5).
+- `rule t`: `t : M.Reading -> M.Outcome`. `flagIf` takes any result type
+  (`examples/residuals.lang:28`), so a rule branches on `u256Le` and
+  `u256Eq`.
+- `answers t`: `t` has the type of `M.answers` below (Q-S3-4).
+
+Elaboration: the form becomes text, as `check_cofamily` does in intent-lang
+(SPEC "choice (ii)"). The checker checks each generated declaration as a
+program `def`, in this order:
+
+| Name | Text | 3.2 |
+|---|---|---|
+| `M.Reading` | `def M.Reading : Type 0 := Prod U256 (Prod U256 ... U256)` (n = 1: `U256`) | `Reading M` |
+| `M.si` | `def M.si : M.Reading -> U256 := fun (r : M.Reading) => first (second^(i-1) r)` (i = n: `second^(n-1) r`) | `M.si` |
+| `M.Outcome` | `def M.Outcome : Type 0 := Sum Unit (Sum Unit ... Unit)` (k copies of `Unit`) | `Outcome M` |
+| `M.Lj` | `def M.Lj : M.Outcome := inr^(j-1) (inl unit)` (j = k: `inr^(k-1) unit`) | the labels |
+| `M.deadline` | `def M.deadline : U256 := t` | `deadline M` |
+| `M.rule` | `def M.rule : M.Reading -> M.Outcome := t` | `rule M` |
+| `M.answers` | `def M.answers : (o : M.Outcome) -> Sigma (r : M.Reading) (Path M.Outcome (M.rule r) o) := t` | `answers M` |
+
+The form makes no reading constructor: a branch writes `pair`.
+
+Probe facts (b1 build):
+
+- `elim` takes a `Sum` scrutinee with a dependent motive (p1). A `def` of a
+  type (`def O : Type 0 := Sum Unit Unit`) unfolds in the motive and the
+  scrutinee (p9).
+- The kernel has no eta rule for `Unit`. `refl : Path (Sum Unit Unit) (inl
+  unit) (inl x)` for a variable `x : Unit` gives `PATH_END` (p3). Thus a
+  branch `fun (u : Unit) => pack r refl` fails (p5). Each branch does an
+  `elim` on its `Unit` field, as in the example; that checks (p7, p8, p9).
+  With three outcomes, the `inr` case gets `t : Sum Unit Unit` and does one
+  more `elim` on `t`.
+- A missing branch gives `TYPE_MISMATCH`: "elim on Sum Unit Unit needs a
+  motive, 2 cases and a scrutinee" (p6). This is the O8 code.
+- A branch whose reading gives a different outcome gives `PATH_END`: "the
+  path at i1 is inr unit, but the type needs inl unit" (p9). Section 8 says
+  `TYPE_MISMATCH` for this case (Q-S3-5).
+
+Refusals:
+
+| Case | Code | Question |
+|---|---|---|
+| no `answers` clause, a clause missing or out of order | `PARSE_EXPECT` | Q-S3-3 |
+| no source, or fewer than two outcomes | `PARSE_EXPECT` | Q-S3-3 |
+| a program `def` whose name has a `.` | `REFUSE_NAME` | Q-S3-2 |
+| a label or a source two times, or a label equal to a source or to a generated name | `REFUSE_NAME` ("already defined", check.c:3071) | |
+| a `market` in a guest program | `REFUSE_KIT` (the `U256` of `M.Reading`, check.c:2605) | Q-S3-1 |
+| a `market` in `domain/domain.lang` | `REFUSE_DATA` | Q-S3-1 |
+| a missing branch | `TYPE_MISMATCH` | O8 |
+| an outcome with no reading | `PATH_END` | Q-S3-5 |
+
+Build sites (S3 s2): lexer.h `TokKind`; lexer.c:21-72 (keywords) and
+240-264 (names: today only `lex_internal` lets a name hold `.`); parser.c
+130-166, 370-406 and 614-669 (top-level forms); ast.h:65-70 (declaration
+kinds); check.c:4515-4562 (form dispatch), with `check_cofamily`
+(check.c:4250-4513) as the model.
+
 ## 5. Laws
 
 | Law | Statement | How it holds |
@@ -384,7 +466,8 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 - `market-missing-branch.lang`: `answers` with one branch missing gives
   `TYPE_MISMATCH`.
 - `market-unanswerable.lang`: an outcome whose branch gives a reading that
-  computes to another outcome gives `TYPE_MISMATCH`.
+  computes to another outcome gives `TYPE_MISMATCH`. The S3 s1 probe gives
+  `PATH_END` (4.6); Q-S3-5 (a) changes this row to `PATH_END`.
 - `contest-ends.lang`, `contest-neutral.lang`: L3, L4, L6 by `refl`.
 - `contest-cell.lang`: `Contest` passes the cell-signature check; a variant
   with `dispute (dA : A) ...` gives `REFUSE_CELL`.
@@ -402,7 +485,7 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S0 | generate from lang-template (tcc-evm-contract); DESIGN verbatim; this plan; README; kit gate | DONE |
 | S1 | USER rules Q1-Q10; this plan records the rulings | DONE |
 | S2 | port intent-lang ef5abe8 (section 6); gate = the intent-lang S7 counters | DONE: `make -B check` EXIT 0 with the intent-lang S7 counters: 49 examples, 0 failed; 19 parse, 186 check and 22 kit-only refusals; 188 evals, 2 proves; contracts 2 written and 5 refused; rings 6 built and 2 refused; 28 guest and 14 host differential rows; 5 runs, 10 run refusals; 8 asmtool; 3 builds, 16 lower refusals, 33 build checks; 20 dispatch; 43 evm steps; 14 precompile rows and 143 steps; 13 mock rows; 15 diff rows; 24 emit regressions; the 13 "regressions: passed" lines; 0 failures. The log is byte for byte the intent-lang S7 log (section 6) |
-| S3 | `Env.block` in the guest (O5); the `market` form (O4): `Reading`, `Outcome`, labels, `rule`, `answers`, `deadline`; rows of 4.2 | NEXT |
+| S3 | `Env.block` in the guest (O5); the `market` form (O4): `Reading`, `Outcome`, labels, `rule`, `answers`, `deadline`; rows of 4.2 | s1 DONE (2026-10-24): b1 `Env.block` (O5) is the intent-lang S8 b1 port, and `make -B check` EXIT 0 with the S2 counters except 50 examples (`blocks.lang`), 6 runs (`blocks.script`), 11 run refusals (a bad BLOCK), 17 lower refusals and 34 build checks (`env-block.lang`). The log is byte for byte the intent-lang S8 b1 log. The market design is 4.6, with Q-S3-1 to Q-S3-5 OPEN. s2 NEXT: the market build after the USER rulings |
 | S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | |
 | S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | |
 | S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | |
@@ -420,11 +503,14 @@ Each item is RULED (S1, 2026-10-24) or kept as the builder call.
   the cofamily form does in intent-lang (text elaboration). The checker
   refuses a market without `answers`. The alternative is a Sigma over the
   universe; it loses the source names. Kept. Q3 (a) makes `answers` a
-  necessary part of the form.
+  necessary part of the form. S3 s1: the design is 4.6 (Q-S3-1 to Q-S3-5).
 - O5 deadline in blocks: `Env.block : U256` in the guest and NUMBER 0x43 in
   the contract. This is the design of intent-lang O17 (its USER ruling Q4
   (b)), not yet built there. If intent-lang builds it first, S3 ports it.
-  Kept.
+  Kept. S3 b1 ports the guest side from intent-lang S8 b1 (not committed
+  there, so S3 replays its replacers). The b1 files keep the intent-lang
+  slice and item names as provenance: intent-lang S10 and O36 (NUMBER) are
+  resolve-lang S7 and O5.
 - O6 one dispute round in v1. A dispute of the verdict (escalation) is path
   composition `trans d e`; it needs Q4 (b) to mean more than `refl`. Kept:
   Q4 (a) makes `Contest A` a proposition, so v1 has one round.
@@ -452,7 +538,7 @@ Each item is RULED (S1, 2026-10-24) or kept as the builder call.
   image), not token weight. The charter decides who is a member. Kept:
   Q6 (a) gives one ballot for each member.
 
-## 11. Questions for the USER (S1)
+## 11. Questions for the USER (S1, S3)
 
 Each question has a recommendation (a). All ten are RULED (S1, 2026-10-24;
 the quote is in section 1).
@@ -484,3 +570,31 @@ the quote is in section 1).
   disputer bond; the loser pays. RULED: (a).
 - Q10 data sources. (a) Reported in the proposal; the dispute is the check.
   (b) On-chain feeds read at the deadline block. RULED: (a).
+
+S3 s1 (2026-10-24) adds five questions for the market form (4.6). Each has
+a recommendation (a). All five are OPEN.
+
+- Q-S3-1 where a market can be. (a) Kit programs only. `U256` and the
+  `u256` operations are kit-only (REFUSE_KIT, check.c:2605), so a guest
+  market gives `REFUSE_KIT`; a market in `domain/domain.lang` gives
+  `REFUSE_DATA`. (b) Guest markets too, with `Nat` sources and a `Nat`
+  deadline.
+- Q-S3-2 the names `M.x`. (a) The lexer reads `M.x` as one name in a
+  program. Only the market elaboration makes such a name; a program `def`
+  whose name has a `.` gives `REFUSE_NAME`. (b) Generated names with `_`
+  (`M_x`), no lexer change; a program `def` can then take a generated name
+  first.
+- Q-S3-3 a market with no `answers`. (a) A parse refusal: the grammar needs
+  the `answers` clause (`PARSE_EXPECT`, one more parse refusal row). (b) A
+  dedicated check code (`REFUSE_MARKET`).
+- Q-S3-4 the `answers` term. (a) The program writes it as an `elim` term;
+  the kernel has no `Unit` eta, so each branch does an `elim` on its `Unit`
+  field (4.6, probes p3, p5, p8). (b) The form takes `label => reading`
+  pairs and writes the `elim` text; then a missing label is a form refusal,
+  not `TYPE_MISMATCH` (O8 changes). (c) Add `Unit` eta to the conversion;
+  then a branch is `fun (u : Unit) => pack r refl`, but each ported row must
+  pass again on a kernel change.
+- Q-S3-5 the code for an outcome with no reading. (a) `PATH_END`, the code
+  that `refl` at the wrong end gives (probes p4, p9); the section 8 row
+  changes. (b) The market check maps `PATH_END` in `answers` to
+  `TYPE_MISMATCH`, as section 8 says.

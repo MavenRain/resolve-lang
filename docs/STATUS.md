@@ -28,6 +28,14 @@
   (`REFUSE_CELL`, `cofamily`, sealed `Enc`, `Quorum` and `open`, `ZKProof`,
   the Sigma verifiers, `ecrecover`); the intent-lang docs/STATUS.md at
   ef5abe8 describes each one.
+- S3 s1 (`Env.block`, O5): the guest `Env` has `block : U256`, and a
+  `langc run` call is `NOW BLOCK CALLER NAME ARGS...`. This is intent-lang
+  S8 b1: S3 replays its two replacer scripts (11 and 78 hits) and copies
+  `examples/blocks.lang`, `test/run/blocks.script`, `test/run/blocks.out`,
+  `test/lower/env-block.lang`, the run-2 fix of `test/evmchain.sh` and the
+  b1 hunks of `docs/host/README.md`. The contract writer does not lower
+  `block` yet (`REFUSE_LOWER`; NUMBER is S7). The `market` form is a design
+  only (PLAN 4.6, Q-S3-1 to Q-S3-5 OPEN).
 
 ## Remaining M0 work
 
