@@ -22,16 +22,41 @@ USER rulings (the request, 2026-10-24):
   The paste names it: an orbit-lang DAO.
 - R4 host: TinyCC.
 
-Builder calls (NOT ruled; section 10 gives each one, section 11 gives the
-questions for the USER):
+USER rulings (S1, 2026-10-24), verbatim:
+
+> Q1-Q10 -> take all defaults
+
+So each question of section 11 takes its recommendation (a):
+
+- Q1 (a): the target is EVM bytecode by hosts/tcc-evm-contract, for any
+  EVM chain.
+- Q2 (a): S2 ports the kernel of intent-lang ef5abe8 (section 6). R1 is
+  already enforced there.
+- Q3 (a): `answers M` gives one branch for each outcome, each with a
+  reading that gives that outcome (4.2).
+- Q4 (a): a dispute is a path in `Contest A`, a cell monad. `Contest A` is
+  a proposition, so the path says only "in dispute" (4.1).
+- Q5 (a): a proposal carries a reading; its outcome is `rule M r` (3.2).
+- Q6 (a): public positions frozen at the deadline, a bLSAG over the masked
+  member ring and a key image for each dispute (4.3).
+- Q7 (a): the majority of the opened tally gives the verdict; a tie keeps
+  the first proposal (4.4).
+- Q8 (a): a parimutuel pool: `take` before the deadline, `claim` after
+  `finalize` (section 7).
+- Q9 (a): no bonds in v1.
+- Q10 (a): the proposal reports the data of the sources; the dispute is
+  the check (3.2).
+
+Builder calls (section 10 gives each one; Q1 and Q2 rule O2 and O3):
 
 - O1: the name resolve-lang (the title of the paste).
 - O2: the target is EVM bytecode, with the kit hosts/tcc-evm-contract. The
   request names no target. The DAO (orbit-lang), the siblings that the paste
   names (sealed-lang) and intent-lang all use this kit, and Polymarket
-  settles on an EVM chain (Q1).
+  settles on an EVM chain. RULED: Q1 (a).
 - O3: the kernel comes from intent-lang ef5abe8, not from orbit-lang 2162fb2.
-  intent-lang already enforces R1 with the same words (Q2, section 6).
+  intent-lang already enforces R1 with the same words (section 6). RULED:
+  Q2 (a).
 - The "Activity" bullets are motivation. The paste marks them as secondary
   sources. The plan does not check them, and no type or operation comes
   from them. They name three threats that the design answers: many
@@ -352,8 +377,8 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | Slice | Content | Status |
 |---|---|---|
 | S0 | generate from lang-template (tcc-evm-contract); DESIGN verbatim; this plan; README; kit gate | DONE |
-| S1 | USER rules Q1-Q10; this plan records the rulings | NEXT |
-| S2 | port intent-lang ef5abe8 (section 6); gate = the intent-lang S7 counters | |
+| S1 | USER rules Q1-Q10; this plan records the rulings | DONE |
+| S2 | port intent-lang ef5abe8 (section 6); gate = the intent-lang S7 counters | NEXT |
 | S3 | `Env.block` in the guest (O5); the `market` form (O4): `Reading`, `Outcome`, labels, `rule`, `answers`, `deadline`; rows of 4.2 | |
 | S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | |
 | S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | |
@@ -363,67 +388,76 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 
 ## 10. Open items
 
-- O1 name: resolve-lang. Builder call.
-- O2 target: EVM by hosts/tcc-evm-contract (Q1).
-- O3 kernel: port intent-lang ef5abe8 (Q2).
+Each item is RULED (S1, 2026-10-24) or kept as the builder call.
+
+- O1 name: resolve-lang. Builder call. Kept.
+- O2 target: EVM by hosts/tcc-evm-contract. RULED: Q1 (a).
+- O3 kernel: port intent-lang ef5abe8. RULED: Q2 (a).
 - O4 the `market` form: a top-level form that elaborates to definitions, as
   the cofamily form does in intent-lang (text elaboration). The checker
   refuses a market without `answers`. The alternative is a Sigma over the
-  universe; it loses the source names.
+  universe; it loses the source names. Kept. Q3 (a) makes `answers` a
+  necessary part of the form.
 - O5 deadline in blocks: `Env.block : U256` in the guest and NUMBER 0x43 in
   the contract. This is the design of intent-lang O17 (its USER ruling Q4
   (b)), not yet built there. If intent-lang builds it first, S3 ports it.
+  Kept.
 - O6 one dispute round in v1. A dispute of the verdict (escalation) is path
-  composition `trans d e`; it needs Q4 (b) to mean more than `refl`.
+  composition `trans d e`; it needs Q4 (b) to mean more than `refl`. Kept:
+  Q4 (a) makes `Contest A` a proposition, so v1 has one round.
 - O7 a dispute of a proposal against itself (`dispute (prop p) (prop p)`)
-  is a loop. L5 refuses it in the contract.
+  is a loop. L5 refuses it in the contract. Kept.
 - O8 a dedicated refusal code for a missing outcome branch. Default: keep
-  `TYPE_MISMATCH`.
+  `TYPE_MISMATCH`. Kept: `TYPE_MISMATCH`.
 - O9 the source registry: which names a market can read. Default: any name;
-  the DAO does not list sources in v1.
+  the DAO does not list sources in v1. Kept: any name. Q10 (a) puts the
+  data in the proposal.
 - O10 the key image for each dispute (4.3). Without it, the masked ring
   leaks the voter by intersection. Needs a hash to curve on chain. Test
-  rows in section 8.
-- O11 the UAT regime of a binary verdict (4.4).
+  rows in section 8. RULED: Q6 (a). The hash to curve is S5 work.
+- O11 the UAT regime of a binary verdict (4.4). Kept: open until S6.
 - O12 intent-lang S9 builds the same encrypted ballots for its DAO.
   resolve-lang S6 builds them for the verdict. Later, one of the two ports
-  the other's form.
+  the other's form. Kept.
 - O13 ecrecover comes with the port and has no use. Keep it (no removal
-  work) or remove it in S2.
+  work) or remove it in S2. Kept: S2 keeps ecrecover (section 6).
 - O14 the guest poll id is fixed to 0 (H:310). The dispute ballot needs a
-  poll id for each dispute: a change of the signature.
+  poll id for each dispute: a change of the signature. Kept: S6 work.
 - O15 `claim` needs division (stake times pool over winning pool). The kit
-  U256 operations need a check in S5.
+  U256 operations need a check in S5. Kept: Q8 (a) keeps `claim`.
 - O16 votes in few wallets: one member, one ballot (the ring and the key
-  image), not token weight. The charter decides who is a member.
+  image), not token weight. The charter decides who is a member. Kept:
+  Q6 (a) gives one ballot for each member.
 
 ## 11. Questions for the USER (S1)
 
-Each question has a recommendation (a).
+Each question has a recommendation (a). All ten are RULED (S1, 2026-10-24;
+the quote is in section 1).
 
 - Q1 target. (a) EVM bytecode by hosts/tcc-evm-contract, for any EVM chain.
-  (b) Another TinyCC kit (name it).
+  (b) Another TinyCC kit (name it). RULED: (a).
 - Q2 kernel route. (a) Port intent-lang ef5abe8: R1 is already enforced.
-  (b) Port orbit-lang 2162fb2 and narrow it to R1 again.
+  (b) Port orbit-lang 2162fb2 and narrow it to R1 again. RULED: (a).
 - Q3 "every outcome needs a branch". (a) `answers M`: one branch for each
   outcome, each with a reading that gives it (4.2). (b) Coverage of `rule
-  M` only.
+  M` only. RULED: (a).
 - Q4 the dispute path. (a) `Contest A`, a cell monad; a proposition, so the
   path says only "in dispute" (4.1). (b) A dispute groupoid over outcome
-  codes with no type parameter; each dispute is its own path.
+  codes with no type parameter; each dispute is its own path. RULED: (a).
 - Q5 a proposal carries. (a) A reading; the outcome is `rule M r`. (b) An
-  outcome only.
+  outcome only. RULED: (a).
 - Q6 the no-position proof. (a) Public positions frozen at the deadline, a
   bLSAG over the masked member ring, a key image for each dispute. (b)
-  Encrypted positions and a Sigma proof that the stake opens to 0.
+  Encrypted positions and a Sigma proof that the stake opens to 0. RULED:
+  (a).
 - Q7 the verdict rule. (a) Majority of the opened tally; a tie keeps the
   first proposal. (b) A quorum and a threshold that the DAO ratifies in
-  `Params`.
+  `Params`. RULED: (a).
 - Q8 the market around the resolution. (a) A parimutuel pool: `take` before
   the deadline, `claim` after `finalize`. (b) Positions as records, with no
   tokens. (c) No ledger: resolution only, with the positions from another
-  contract.
+  contract. RULED: (a).
 - Q9 bonds. (a) None in v1: the paste names none. (b) A proposer bond and a
-  disputer bond; the loser pays.
+  disputer bond; the loser pays. RULED: (a).
 - Q10 data sources. (a) Reported in the proposal; the dispute is the check.
-  (b) On-chain feeds read at the deadline block.
+  (b) On-chain feeds read at the deadline block. RULED: (a).
