@@ -75,13 +75,13 @@ Slice K3a adds the contract types to the checker and the evaluator. Slice K3b ad
 The contract prelude is in `src/front/contract.c`. The front end loads it after `domain/domain.lang` and before the program. Its names are core names, thus a program cannot declare them again.
 
 ```
-family Env := makeEnv (now : Nat) (block : U256) (caller : Addr)
+family Env := makeEnv (now : Nat) (block : U256) (caller : Addr) (chain : U256) (self : Addr)
 family Out := pay (payToken : Addr) (payTo : Addr) (payAmount : U256)
   | pull (pullToken : Addr) (pullFrom : Addr) (pullTo : Addr) (pullAmount : U256)
   | emit (emitTag : Nat) (emitFields : List U256)
 ```
 
-- `Env` gives the time of the call (`now`), the block number of the call (`block`, O17) and the address of the caller (`caller`).
+- `Env` gives the time of the call (`now`), the block number of the call (`block`, O17), the address of the caller (`caller`), the chain id (`chain`) and the contract address (`self`, Q-S7-6).
 - `Out` is one effect of an entry. `pay` sends tokens to an address. `pull` moves tokens from an address. `emit` writes an event.
 - `emit` stays in slice K4a1. A program can also declare named events (refer to `## Events (slice K4a1)`).
 - Slice K4c writes a LOG only for a named event, thus `emit` has no EVM form. `langc build` refuses an entry that makes an `emit` (REFUSE_LOWER, `test/lower/emit.lang`). `langc check`, `langc eval` and `langc run` keep `emit`.
@@ -125,13 +125,14 @@ The history rule (slice K3c) makes sure that a call cannot make a history field 
 
 Why the rule is sound: each state in an entry comes from the input state, or from a constructor that keeps or adds to each history field of a state. A definition without `State` in its type cannot give a state to an entry, because a program cannot declare a family that holds a state (rule R1). Thus each history field of the result is not less than the same field of the input. `u256Add` and `natAdd` trap on overflow, so a value cannot wrap. The test files are `test/check/history-*.lang`.
 
-`langc run PROG SCRIPT` checks the program `PROG`, gets the start state from `init`, and then does the calls in `SCRIPT` in sequence. Each line of a script is one call:
+`langc run PROG SCRIPT` checks the program `PROG`, gets the start state from `init`, and then does the calls in `SCRIPT` in sequence. Each call has this form:
 
 ```
 NOW BLOCK CALLER NAME ARGS...
 ```
 
-- `NOW` is a `Nat` literal. `BLOCK` is a `U256` literal (for example `100u`). `CALLER` is an `Addr` literal: `0x` and 40 hex digits. The call gets `makeEnv NOW BLOCK CALLER` as `env` and the current state as `s`.
+- A script can have one `env CHAIN SELF` line before the first call. `CHAIN` is a `U256` literal and `SELF` is an `Addr` literal. These values apply to every call. Without this line, `CHAIN` is `0u` and `SELF` is `0x0000000000000000000000000000000000000000`. For example, `test/run/chains.script` sets chain 1 and the contract address used by the chain test.
+- `NOW` is a `Nat` literal. `BLOCK` is a `U256` literal (for example `100u`). `CALLER` is an `Addr` literal: `0x` and 40 hex digits. The call gets `makeEnv NOW BLOCK CALLER CHAIN SELF` as `env` and the current state as `s`.
 - `NAME` is an entry or a view. A helper or an unknown name is not a call.
 - Each argument has the literal form of its parameter type: `Nat` (for example `7`), `Flag` (`0` or `1`), `U256` (decimal digits or `0x` and 1 or more hex digits, then `u`, for example `5u` or `0xffu`) or `Addr`. Upper case and lower case hex digits are both correct.
 - Spaces, tabs and carriage returns separate the words.
@@ -139,7 +140,7 @@ NOW BLOCK CALLER NAME ARGS...
 - Each call starts with the full fuel limit.
 - The start state also gets the full fuel limit. A NUL byte in a script line is a `RUN_SCRIPT` error.
 
-The output has one line for each call. The calls have the numbers 1, 2, 3 and so on. Comments and blank lines do not get a number. `test/run/basic.script` gives this output (`test/run/basic.out`):
+The output has one line for each call. The calls have the numbers 1, 2, 3 and so on. The `env` line, comments and blank lines do not get a number. `test/run/basic.script` gives this output (`test/run/basic.out`):
 
 ```
 1 deposit ok
@@ -165,7 +166,7 @@ The exit codes of `langc run`:
 - 0: the run did all the calls in the script.
 - 1: a check refusal or a script error. The run stops at the first bad line. The output lines of the calls before it stay on stdout.
   - `RUN_INIT`: the program has no state, it has no `def init : State`, or `init` has a trap.
-  - `RUN_SCRIPT`: a line has fewer than 4 words, a bad `NOW`, `BLOCK` or `CALLER`, or a NUL byte. The message gives `SCRIPT:LINE`.
+  - `RUN_SCRIPT`: a call has fewer than 4 words or a bad `NOW`, `BLOCK` or `CALLER`; an `env` line has the wrong number of words, an invalid `CHAIN` or `SELF`, occurs twice or follows a call; or a line contains a NUL byte. The message gives `SCRIPT:LINE`.
   - `EVAL_ENTRY`: `NAME` is not an entry or a view.
   - `EVAL_FUEL`, `EVAL_DEPTH` and `EVAL_PRINT` stop the run, as in `langc eval`.
 - 2: a usage error, an `IO` error for the script, or `EVAL_ARGS` (a bad argument or an incorrect number of arguments), as in `langc eval`.
@@ -246,7 +247,7 @@ Decode (slice K4b):
 
 Entry body (slice K4b):
 
-- `now` is the TIMESTAMP of the block and `caller` is CALLER, the sender of the call. K4c does not lower `block` until S10: a read of `block` gives `REFUSE_LOWER` (`test/lower/env-block.lang`).
+- `now` is TIMESTAMP, `block` is NUMBER (since S10), `caller` is CALLER, `chain` is CHAINID and `self` is ADDRESS (Q-S7-6). The last two give the chain id and the address of the executing contract.
 - `none` reverts with empty data.
 - A trap reverts with the 4 bytes of the `Trap()` selector, `0xae96083a`.
 - `some (pair STATE OUT)` writes each changed word field and each Map write with SSTORE. Then the block stops (STOP).

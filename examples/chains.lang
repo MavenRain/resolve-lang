@@ -1,0 +1,23 @@
+-- Env.chain and Env.self (S7 s2, Q-S7-6 (a)): the chain id (EVM CHAINID,
+-- 0x46) and the contract address (EVM ADDRESS, 0x30) of a call. `langc run`
+-- takes them from the env line `env CHAIN SELF` of a script. Without that
+-- line, the chain id is 0u and the address is 0x0.
+state State := makeState (seenChain : U256) (seenSelf : Addr)
+def init : State := makeState 0u 0x0000000000000000000000000000000000000000
+
+-- The Env of a call on chain 1 at the receiver address of test/evmchain.sh.
+def probe : Env := makeEnv 0 0u 0x00000000000000000000000000000000000000bb 1u 0x0000000000000000000000007265636569766572
+
+-- The eval rows: the chain id and the address of probe, as Nat tests.
+def chainIs : Nat -> Flag := fun (n : Nat) => u256Eq (chain probe) (toU256 n)
+def selfIs : Nat -> Flag := fun (n : Nat) => u256Eq (addrToU256 (self probe)) (toU256 n)
+
+-- Entry: store the chain id and the contract address of the call.
+def stamp : (env : Env) -> (s : State) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) => some (pair (makeState (chain env) (self env)) nil)
+
+-- Entry: revert (none) when the call is not on the chain C at the address A
+-- (the domain check of Q-S7-6).
+def onlyAt : (env : Env) -> (s : State) -> (c : U256) -> (a : Addr) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (c : U256) (a : Addr) =>
+    flagIf (u256Eq (chain env) c) (flagIf (addrEq (self env) a) (some (pair s nil)) none) none

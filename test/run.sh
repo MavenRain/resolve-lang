@@ -93,6 +93,10 @@ run_refused 1 RUN_INIT examples/entries.lang "1 1u $caller addPrice 1 2"
 run_refused 1 EVAL_ENTRY examples/map.lang "1 1u $caller putAll 3"
 run_refused 1 EVAL_ENTRY examples/map.lang "1 1u $caller allBooks"
 run_refused 1 RUN_SCRIPT examples/contract.lang "1 x $caller ping"
+# The env line (S7 s2, Q-S7-6 (a)) is env CHAIN SELF, one time, before the first call.
+run_refused 1 RUN_SCRIPT examples/chains.lang "env 1u"
+run_refused 1 RUN_SCRIPT examples/chains.lang "env 1 $caller"
+run_refused 1 RUN_SCRIPT examples/chains.lang "$(printf '1 1u %s stamp\nenv 1u %s' "$caller" "$caller")"
 
 # A NUL cannot hide extra words. Calls before the bad line keep their output.
 printf '1 1u %s balance\n2 2u %s deposit 5u\000 6u\n' "$caller" "$caller" >"$tmp/bad.script"

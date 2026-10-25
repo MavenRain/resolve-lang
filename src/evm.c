@@ -237,12 +237,15 @@ static int emit_binary(Emit *e, const IrExpr *x) {
   return 0;
 }
 
-/* The op of an Env field (C-K4-12; NUMBER since S10, O17). */
+/* The op of an Env field (C-K4-12; NUMBER since S10, O17; CHAINID and
+   ADDRESS since S7 s2, Q-S7-6). */
 static Op env_op(IrEnv field) {
   switch (field) {
   case IR_ENV_NOW: return EVM_OP_TIMESTAMP;
   case IR_ENV_BLOCK: return EVM_OP_NUMBER;
   case IR_ENV_CALLER: return EVM_OP_CALLER;
+  case IR_ENV_CHAIN: return EVM_OP_CHAINID;
+  case IR_ENV_SELF: return EVM_OP_ADDRESS;
   }
   return EVM_OP_CALLER;
 }

@@ -4914,7 +4914,8 @@ typedef struct {
 } RunCall;
 
 /* A run: the script path, the prelude families, the calls so far, the
-   current state and a print buffer of PRINT_MAX bytes. */
+   current state, a print buffer of PRINT_MAX bytes, and the chain id and
+   the contract address of the env line (S7 s2, Q-S7-6). */
 typedef struct {
   const char *path;
   uint32_t env;
@@ -4922,6 +4923,8 @@ typedef struct {
   uint32_t calls;
   const Value *state;
   char *buf;
+  U256 chain;  /* the chain id of each call: the env line, else 0u */
+  U256 self;   /* the contract address of each call: the env line, else 0 */
 } Run;
 
 static uint32_t find_family(const Machine *m, const char *name) {
@@ -4985,15 +4988,35 @@ static int print_value(Machine *m, const Value *v, char *buf) {
 }
 
 static const Value *make_env(Machine *m, const Run *r, uint64_t now, const U256 *block, const U256 *caller) {
-  const Value **args = arena_alloc(m->arena, 3u * sizeof *args);
-  if (args == NULL) {
+  const Value **args = arena_alloc(m->arena, 5u * sizeof *args);
+  U256 *words = arena_alloc(m->arena, 2u * sizeof *words);
+  if (args == NULL || words == NULL) {
     diag_fail(m->diag, "OOM", m->def, "out of memory");
     return NULL;
   }
+  memcpy(&words[0], &r->chain, sizeof *words);
+  memcpy(&words[1], &r->self, sizeof *words);
   args[0] = val_nat(m, now);
   args[1] = val_word(m, WORD_U256, block);
   args[2] = val_word(m, WORD_ADDR, caller);
-  return args[0] == NULL || args[1] == NULL || args[2] == NULL ? NULL : val_op(m, VAL_OP, OP_CTOR, m->families[r->env].first_ctor, 0, args, 3u);
+  args[3] = val_word(m, WORD_U256, &words[0]);
+  args[4] = val_word(m, WORD_ADDR, &words[1]);
+  return args[0] == NULL || args[1] == NULL || args[2] == NULL || args[3] == NULL || args[4] == NULL
+    ? NULL : val_op(m, VAL_OP, OP_CTOR, m->families[r->env].first_ctor, 0, args, 5u);
+}
+
+/* The env line `env CHAIN SELF` (S7 s2, Q-S7-6 (a)): the chain id and the
+   contract address of each call. It comes one time, before the first call.
+   Returns 0 or 1. */
+static int run_env(Machine *m, Run *r, uint32_t line, char *const *word, uint32_t count, int *seen) {
+  if (count != 3u || r->calls != 0u || *seen)
+    return diag_fail(m->diag, "RUN_SCRIPT", NULL, "%s:%u: the env line is env CHAIN SELF, one time, before the first call", r->path, line) + 1;
+  if (!parse_word(word[1], WORD_U256, &r->chain))
+    return diag_fail(m->diag, "RUN_SCRIPT", NULL, "%s:%u: CHAIN '%s' is not a U256 (for example 1u)", r->path, line, word[1]) + 1;
+  if (!parse_word(word[2], WORD_ADDR, &r->self))
+    return diag_fail(m->diag, "RUN_SCRIPT", NULL, "%s:%u: SELF '%s' is not an Addr (0x and 40 hex digits)", r->path, line, word[2]) + 1;
+  *seen = 1;
+  return 0;
 }
 
 /* One call `NOW BLOCK CALLER NAME ARGS...` (D-6 to D-8, O17). A trap is a revert: the
@@ -5090,6 +5113,7 @@ int run_command(Machine *m, const char *path, const char *text, size_t len, FILE
   uint32_t line = 0;
   size_t pos = 0;
   int status = 0;
+  int seen = 0;
   Run r;
   memset(&r, 0, sizeof r);
   r.path = path;
@@ -5123,7 +5147,7 @@ int run_command(Machine *m, const char *path, const char *text, size_t len, FILE
     line++;
     count = split_words(copy, word, ENTRY_PARAMS_MAX + 4u);
     if (count != 0u && strncmp(word[0], "--", 2) != 0)
-      status = run_call(m, &r, line, word, count, out);
+      status = strcmp(word[0], "env") == 0 ? run_env(m, &r, line, word, count, &seen) : run_call(m, &r, line, word, count, out);
     pos = end + 1u;
   }
   if (status != 0)

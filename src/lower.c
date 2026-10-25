@@ -620,11 +620,15 @@ static const IrExpr *lower_expr(Low *l, Stmts *b, const Value *v) {
   if (v != NULL && v->kind == VAL_VAR && v->nat >= 2u) return ir_local(l, (uint32_t)v->nat - 2u);
   if (field_of(v, 1u, &f) && form_at(l, f) == FORM_WORD) return ir_sload(l, ir_const(l, f));
   if (field_of(v, 0u, &f) && l->env != NULL && f < l->env->field_count) {
+    static const char *const names[] = {"now", "block", "caller", "chain", "self"};
+    static const IrEnv fields[] = {IR_ENV_NOW, IR_ENV_BLOCK, IR_ENV_CALLER, IR_ENV_CHAIN, IR_ENV_SELF};
     const char *name = l->env->fields[f].name;
-    int now = strcmp(name, "now") == 0, block = strcmp(name, "block") == 0;
-    IrExpr *e = now || block || strcmp(name, "caller") == 0 ? new_expr(l, IR_EXPR_ENV) : NULL;
-    if (e != NULL) e->field = now ? IR_ENV_NOW : block ? IR_ENV_BLOCK : IR_ENV_CALLER;
-    return e != NULL ? e : (refuse(l, v, "(an Env field that is not now, block or caller)"), NULL);
+    uint32_t k = 0;
+    IrExpr *e;
+    while (k < 5u && strcmp(name, names[k]) != 0) k++;
+    e = k < 5u ? new_expr(l, IR_EXPR_ENV) : NULL;
+    if (e != NULL) e->field = fields[k];
+    return e != NULL ? e : (refuse(l, v, "(an Env field that is not now, block, caller, chain or self)"), NULL);
   }
   if (is_op(v, OP_TO_U256) && v->argc == 1) return lower_expr(l, b, v->args[0]);
   if (is_op(v, OP_ADDR_TO_U256) && v->argc == 1) return lower_expr(l, b, v->args[0]);

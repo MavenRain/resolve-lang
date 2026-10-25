@@ -40,12 +40,19 @@ chain() {
     fail=$((fail + 1))
     return
   fi
-  awk 'NF && $1 != "--"' "$_script" >"$tmp/calls"
+  # The env line of a script (Q-S7-6 (a)) must give the chain values.
+  awk 'NF && $1 == "env"' "$_script" >"$tmp/header"
+  if [ -s "$tmp/header" ] && [ "$(cat "$tmp/header")" != "env 1u 0x$receiver" ]; then
+    echo "FAIL evm $_script: the env line is not env 1u 0x$receiver"
+    fail=$((fail + 1))
+    return
+  fi
+  awk 'NF && $1 != "--" && $1 != "env"' "$_script" >"$tmp/calls"
   _calls=$(awk 'END { print NR }' "$tmp/calls")
   _k=0
   while [ "$_k" -lt "$_calls" ]; do
     _k=$((_k + 1))
-    awk -v k="$_k" 'NR <= k' "$tmp/calls" >"$tmp/prefix"
+    { cat "$tmp/header"; awk -v k="$_k" 'NR <= k' "$tmp/calls"; } >"$tmp/prefix"
     set -- $(awk -v k="$_k" 'NR == k' "$tmp/calls")
     _now=$1 _block=$2 _caller=$3 _name=$4
     shift 4
@@ -133,6 +140,9 @@ chain test/same-state.lang test/same-state.script
 numbered=1
 chain examples/blocks.lang test/run/blocks.script
 numbered=0
+# test/run/chains.script (S7 s2, Q-S7-6 (a)): its env line gives chain id 1
+# and the receiver address, the CHAINID and ADDRESS of each step.
+chain examples/chains.lang test/run/chains.script
 
 rm -rf "$tmp"
 echo "evm steps: $steps checked"

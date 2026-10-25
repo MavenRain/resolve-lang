@@ -636,6 +636,19 @@ The product can wrap, thus `claim` must check it: the product divided by
 the stake must be the pool (Q-S7-7). Parts b2 and b3 are the next session
 (S7 s2 resume 2).
 
+S7 s2 b3 (2026-10-25): the kit `Env` has two new fields, `chain : U256`
+and `self : Addr` (Q-S7-6 (a)). The lowering maps them to `IR_ENV_CHAIN`
+and `IR_ENV_SELF`, which emit CHAINID (0x46) and ADDRESS (0x30). `langc
+run` reads the two values from the env line `env CHAIN SELF` of a script.
+This line comes one time, before the first call. Without it, the chain id
+is 0u and the address is 0x0, thus the other scripts do not change.
+`examples/chains.lang` (a kit file) has the eval rows, the entry `stamp`
+and the entry `onlyAt`, which reverts on another chain id or another
+address. `test/run/chains.script` runs it at chain 1 and at the receiver
+address of `test/evmchain.sh`. `test/evm.sh` runs it on the chain, and
+it refuses an env line that does not give these values. Part b2 (the ring
+lowering of Q-S7-3) is the next session (S7 s2 resume 3).
+
 ## 5. Laws
 
 | Law | Statement | How it holds |
