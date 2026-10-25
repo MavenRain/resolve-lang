@@ -287,3 +287,12 @@ def uaArrow : (A : Type 0) -> (B : Type 0) -> (C : Type 0) -> (e : Equiv A B) ->
   fun (A : Type 0) => fun (B : Type 0) => fun (C : Type 0) => fun (e : Equiv A B) => fun (f0 : A -> C) => fun (f1 : B -> C) =>
   fun (h : (a : A) -> Path C (f0 a) (f1 (witness e a))) =>
     fun (i : I) => fun (a : ua A B e @ i) => hcomp C (~i \/ i) (fun (j : I) => [ ~i -> h a @ ~j, i -> f1 a ]) (f1 (unglue a))
+
+-- The contest (resolve-lang S4, PLAN 4.1, Q4 (a)): a dispute is a path in a
+-- cell monad of proposals, not a path in an outcome type (an outcome type is
+-- a set). prop is the generator. dispute is a 1-cell from dA to dB, with the
+-- dispute id dGround as closed base data. dispute connects all points, so
+-- Contest A is a proposition (the squash1 argument). The dispute id and the
+-- ballots are contract state.
+family Contest (A : Type 0) := prop (propOf : A)
+  | dispute (dA : Contest A) (dB : Contest A) (dGround : U256) (i : I) [ ~i -> dA, i -> dB ]

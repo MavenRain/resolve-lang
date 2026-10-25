@@ -47,6 +47,14 @@
   `.` `REFUSE_NAME`, a missing branch `TYPE_MISMATCH` and a branch with the
   wrong reading `PATH_END`. `examples/market.lang` has a binary market and a
   market with three outcomes.
+- S4 (`Contest`, PLAN 4.1, Q4 (a)): the domain declares the cell monad
+  `Contest A` with the generator `prop` and the 1-cell
+  `dispute dA dB dGround i` from `dA` to `dB`. A program defines
+  `Verdict = Sum Unit Unit` (`left` is `i0`, `right` is `i1`), `swap` and
+  `verdictAt A x y d v` (the path at the verdict endpoint). L3, L4 and L6
+  hold by `refl` (`examples/contest-ends.lang`,
+  `examples/contest-neutral.lang`). A wrong end gives `PATH_END`, and a
+  dispute end of the type parameter gives `REFUSE_CELL` (fronttool).
 
 ## Remaining M0 work
 

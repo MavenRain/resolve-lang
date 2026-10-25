@@ -192,3 +192,7 @@ market heatMild => inr (inl unit)
 market rainNo => inr unit
 market heatHotReading => 30u
 market rainYesReading => pair 60u 20u
+contest-ends vLeft => prop U256 60u
+contest-ends vRight => prop U256 10u
+contest-ends swapLeft => inr unit
+contest-ends swapRight => inl unit

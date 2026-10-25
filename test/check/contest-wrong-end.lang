@@ -1,0 +1,5 @@
+-- L3 is not vacuous: the dispute path from p to q does not start at q.
+def p : Contest U256 := prop U256 60u
+def q : Contest U256 := prop U256 10u
+def d : Path (Contest U256) p q := fun (i : I) => dispute U256 p q 7u i
+def wrong : Path (Contest U256) (d @ i0) q := refl

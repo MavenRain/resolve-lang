@@ -34,3 +34,5 @@ threshold.lang
 onehot.lang
 blocks.lang
 market.lang
+contest-ends.lang
+contest-neutral.lang

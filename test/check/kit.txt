@@ -96,3 +96,4 @@ market-missing-branch.lang
 market-unanswerable.lang
 market-dotted-def.lang
 market-label-source.lang
+contest-wrong-end.lang

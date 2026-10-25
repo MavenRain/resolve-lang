@@ -1,0 +1,21 @@
+-- Neutrality (resolve-lang S4, PLAN 4.4, law L6): sym swaps the ends of a
+-- dispute and swap swaps the verdict, so the kept proposal does not change.
+-- The proof is elim on the verdict, with refl in each case. swap is an
+-- involution: elim on the verdict, then on its Unit field (the kernel has no
+-- Unit eta).
+def Verdict : Type 0 := Sum Unit Unit
+def left : Verdict := inl unit
+def right : Verdict := inr unit
+def swap : Verdict -> Verdict := fun (v : Verdict) => either (fun (u : Unit) => right) (fun (u : Unit) => left) v
+def verdictAt : (A : Type 0) -> (x : Contest A) -> (y : Contest A) -> Path (Contest A) x y -> Verdict -> Contest A :=
+  fun (A : Type 0) => fun (x : Contest A) => fun (y : Contest A) => fun (d : Path (Contest A) x y) => fun (v : Verdict) =>
+    either (fun (u : Unit) => d @ i0) (fun (u : Unit) => d @ i1) v
+def neutral : (A : Type 0) -> (x : Contest A) -> (y : Contest A) -> (d : Path (Contest A) x y) -> (v : Verdict) ->
+  Path (Contest A) (verdictAt A y x (sym d) (swap v)) (verdictAt A x y d v) :=
+  fun (A : Type 0) => fun (x : Contest A) => fun (y : Contest A) => fun (d : Path (Contest A) x y) => fun (v : Verdict) =>
+    elim (fun (w : Verdict) => Path (Contest A) (verdictAt A y x (sym d) (swap w)) (verdictAt A x y d w))
+      (fun (u : Unit) => refl) (fun (u : Unit) => refl) v
+def swapInv : (v : Verdict) -> Path Verdict (swap (swap v)) v :=
+  fun (v : Verdict) => elim (fun (w : Verdict) => Path Verdict (swap (swap w)) w)
+    (fun (u : Unit) => elim (fun (z : Unit) => Path Verdict (swap (swap (inl z))) (inl z)) refl u)
+    (fun (u : Unit) => elim (fun (z : Unit) => Path Verdict (swap (swap (inr z))) (inr z)) refl u) v

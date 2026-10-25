@@ -1,0 +1,34 @@
+-- The contest ends (resolve-lang S4, PLAN 4.1, laws L3 and L4). Verdict is
+-- the endpoint that the DAO picks: left is i0 and right is i1. verdictAt
+-- evaluates a dispute path at the verdict endpoint. The kernel has no
+-- implicit arguments, so verdictAt takes the type and the two ends. The
+-- Verdict names are program names: examples/formers.lang defines left and
+-- right, so S4 keeps them out of the domain.
+def Verdict : Type 0 := Sum Unit Unit
+def left : Verdict := inl unit
+def right : Verdict := inr unit
+def swap : Verdict -> Verdict := fun (v : Verdict) => either (fun (u : Unit) => right) (fun (u : Unit) => left) v
+def verdictAt : (A : Type 0) -> (x : Contest A) -> (y : Contest A) -> Path (Contest A) x y -> Verdict -> Contest A :=
+  fun (A : Type 0) => fun (x : Contest A) => fun (y : Contest A) => fun (d : Path (Contest A) x y) => fun (v : Verdict) =>
+    either (fun (u : Unit) => d @ i0) (fun (u : Unit) => d @ i1) v
+-- L3: a dispute path has the two proposals as its ends.
+def endsLeft : (A : Type 0) -> (a : A) -> (b : A) -> (g : U256) -> Path (Contest A) (dispute A (prop A a) (prop A b) g i0) (prop A a) :=
+  fun (A : Type 0) => fun (a : A) => fun (b : A) => fun (g : U256) => refl
+def endsRight : (A : Type 0) -> (a : A) -> (b : A) -> (g : U256) -> Path (Contest A) (dispute A (prop A a) (prop A b) g i1) (prop A b) :=
+  fun (A : Type 0) => fun (a : A) => fun (b : A) => fun (g : U256) => refl
+-- L4: the verdict left keeps the left end, and the verdict right keeps the
+-- right end.
+def verdictLeft : (A : Type 0) -> (x : Contest A) -> (y : Contest A) -> (d : Path (Contest A) x y) -> Path (Contest A) (verdictAt A x y d left) x :=
+  fun (A : Type 0) => fun (x : Contest A) => fun (y : Contest A) => fun (d : Path (Contest A) x y) => refl
+def verdictRight : (A : Type 0) -> (x : Contest A) -> (y : Contest A) -> (d : Path (Contest A) x y) -> Path (Contest A) (verdictAt A x y d right) y :=
+  fun (A : Type 0) => fun (x : Contest A) => fun (y : Contest A) => fun (d : Path (Contest A) x y) => refl
+-- The eval rows: a dispute with the id 7u between the readings 60u and 10u.
+def p : Contest U256 := prop U256 60u
+def q : Contest U256 := prop U256 10u
+def d : Path (Contest U256) p q := fun (i : I) => dispute U256 p q 7u i
+def atLeft : Path (Contest U256) (verdictAt U256 p q d left) p := refl
+def atRight : Path (Contest U256) (verdictAt U256 p q d right) q := refl
+def vLeft : Contest U256 := verdictAt U256 p q d left
+def vRight : Contest U256 := verdictAt U256 p q d right
+def swapLeft : Verdict := swap left
+def swapRight : Verdict := swap right

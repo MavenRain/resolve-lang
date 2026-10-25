@@ -221,6 +221,15 @@ verdictAt d v := either (fun _ => d @ i0) (fun _ => d @ i1) v
 The contract keeps the proposal at that end. No eliminator out of `Contest
 A` is needed, so the paths never have to map into `Outcome M`.
 
+S4 (DONE, 2026-10-24): the probes accept this family as it is. The `U256`
+field and the boundary pass the cell-signature check, and a variant with
+`dispute (dA : A) ...` gives `REFUSE_CELL` (rule R1). The kernel has no
+implicit arguments, so `verdictAt` takes the type and the two ends:
+`verdictAt A x y d v`. `Verdict`, `left`, `right`, `swap` and `verdictAt`
+are program `def`s, not domain names: a domain name is a core name (rule
+R4), and `examples/formers.lang` defines `left` and `right`. S6 or S7
+decides if they move into the domain.
+
 A consequence that the USER must see: for a fixed `g`, the 1-cell connects
 every two points, so `Contest A` is a proposition (the same argument as
 `squash1`). All disputes between `p` and `q` are equal as paths. The path
@@ -495,9 +504,15 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
   gives `PARSE_EXPECT`, and a fronttool row gives `REFUSE_DATA` for a
   market in the domain. Eval rows apply `M.rule` to a reading and take the
   `witness` of `M.answers` at a label (`examples/market.lang`).
-- `contest-ends.lang`, `contest-neutral.lang`: L3, L4, L6 by `refl`.
-- `contest-cell.lang`: `Contest` passes the cell-signature check; a variant
-  with `dispute (dA : A) ...` gives `REFUSE_CELL`.
+- `examples/contest-ends.lang` (L3, L4) and `examples/contest-neutral.lang`
+  (L6, and `swap` is an involution): by `refl`. They are examples, because
+  the gate checks a file that passes only under `examples/`.
+  `test/check/contest-wrong-end.lang`: a wrong end gives `PATH_END`. Eval
+  rows evaluate `verdictAt` at `left` and at `right`, and `swap`.
+- The cell rows: a program cannot declare a family (`REFUSE_DATA`), so two
+  fronttool `domain` rows (the family `Rival`) check that the `Contest`
+  shape passes the cell-signature check and that a variant with
+  `rivalPath (rivalA : A) ...` gives `REFUSE_CELL`.
 - Run scripts with the block column: a `take` at the deadline reverts; a
   dispute with the same outcome is refused; a ballot from a member with a
   stake fails the ring check; a second ballot with the same key image is
@@ -513,8 +528,8 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S1 | USER rules Q1-Q10; this plan records the rulings | DONE |
 | S2 | port intent-lang ef5abe8 (section 6); gate = the intent-lang S7 counters | DONE: `make -B check` EXIT 0 with the intent-lang S7 counters: 49 examples, 0 failed; 19 parse, 186 check and 22 kit-only refusals; 188 evals, 2 proves; contracts 2 written and 5 refused; rings 6 built and 2 refused; 28 guest and 14 host differential rows; 5 runs, 10 run refusals; 8 asmtool; 3 builds, 16 lower refusals, 33 build checks; 20 dispatch; 43 evm steps; 14 precompile rows and 143 steps; 13 mock rows; 15 diff rows; 24 emit regressions; the 13 "regressions: passed" lines; 0 failures. The log is byte for byte the intent-lang S7 log (section 6) |
 | S3 | `Env.block` in the guest (O5); the `market` form (O4): `Reading`, `Outcome`, labels, `rule`, `answers`, `deadline`; rows of 4.2 | s1 DONE (2026-10-24): b1 `Env.block` (O5) is the intent-lang S8 b1 port, and `make -B check` EXIT 0 with the S2 counters except 50 examples (`blocks.lang`), 6 runs (`blocks.script`), 11 run refusals (a bad BLOCK), 17 lower refusals and 34 build checks (`env-block.lang`). The log is byte for byte the intent-lang S8 b1 log. The market design is 4.6. s2 DONE (2026-10-24): the market build after the USER rulings Q-S3-1 to Q-S3-5 (a) (section 1): the `market` keyword and `M.x` names in a program, `parse_market`, `check_market` (text elaboration), `examples/market.lang` (Rain and Heat), five check rows, one parse row, six eval rows and a fronttool `REFUSE_DATA` row. `make -B check` EXIT 0 with the s1 counters except 51 examples, 20 parse, 191 check and 23 kit-only refusals, and 194 evals. DONE |
-| S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | NEXT |
-| S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | |
+| S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | DONE (2026-10-24): `Contest` (4.1) in the domain; `Verdict`, `left`, `right`, `swap` and `verdictAt` as program `def`s (the S4 note of 4.1); `examples/contest-ends.lang` (L3, L4), `examples/contest-neutral.lang` (L6), `test/check/contest-wrong-end.lang` (`PATH_END`), two fronttool cell rows and four eval rows (section 8). `make -B check` EXIT 0 with the S3 counters except 53 examples, 192 check refusals and 198 evals. The domain change moves no other row. DONE |
+| S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | NEXT |
 | S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | |
 | S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | |
 | S8 | mutants, SPEC, VALIDATION, close | |

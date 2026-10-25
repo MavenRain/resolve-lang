@@ -481,6 +481,14 @@ int main(void) {
                "| badNode (badLabel : Unit -> A) (badTail : BadLabel A)", "REFUSE_CELL");
   ok &= domain("family Wrapped (A : Type 0) := wrappedEta (wrappedValue : A) "
                "| wrappedNode (wrappedTail : Option (Wrapped A))", "REFUSE_CELL");
+  /* The contest (resolve-lang S4, PLAN 4.1 and section 8): the shape of
+     Contest passes the cell-signature check, and a dispute end of the type
+     parameter gives REFUSE_CELL (rule R1). The names are new, because the
+     domain declares Contest. */
+  ok &= domain("family Rival (A : Type 0) := rivalOf (rivalOfA : A) "
+               "| rivalPath (rivalA : Rival A) (rivalB : Rival A) (rivalId : U256) (i : I) [ ~i -> rivalA, i -> rivalB ]", NULL);
+  ok &= domain("family Rival (A : Type 0) := rivalOf (rivalOfA : A) "
+               "| rivalPath (rivalA : A) (rivalB : Rival A) (rivalId : U256) (i : I) [ ~i -> rivalA, i -> rivalB ]", "REFUSE_CELL");
   ok &= domain("family F := makeF (field : Nat) (field : Flag)", "REFUSE_NAME");
   ok &= domain("family F := makeF (makeF : Nat)", "REFUSE_NAME");
   ok &= domain("family F := makeF (firstField : Nat) (secondField : Flag)", NULL);
