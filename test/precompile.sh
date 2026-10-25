@@ -205,6 +205,92 @@ else
   call "out 12bb1fff7bfbf6d742d74adb8e0f9b9ca9e86c1cb64551cb59bd21303ef262f1" sumY "$s0c1x" "$s0c1y" "$s1c1x" "$s1c1y"
 fi
 
+# The dispute ballots of examples/ballot.lang (resolve-lang S6 s2, a port of
+# intent-lang 3df9d96, Q-S6-2 (a)): the words of `build/ballottool words` (the
+# election key of thresholdtool, n 3, t 2; the tweaked ring of the charter keys
+# blsag_key(0 .. 2) in the dispute of market 0; voters 0, 1 and 2 vote right,
+# right and left). Each WANT is the host result of test/ballottool.c (`ballot
+# regressions`). Voter 0's slot proof under voter 1's key image fails
+# slotBound (the ctx binds I), voter 1's slot 0 C1 in voter 0's digest fails
+# ballotSig, the host 3-ballot sums open to left 1 and right 2, and verdict
+# keeps left on a tie (Q-S6-3 (a)).
+# Counts are canonical scalars: zero opens, and r and r + 1 are refused.
+prog=examples/ballot.lang
+b0ix=0x0e50a85d002876d229a89eabdaa865f0cf1b2a28a406a3f656db9460f766f709u
+b0iy=0x0631739add132c194ae61fe0e931af39224f576e51467bd83930f8527e3a84c9u
+b0c1=0xe20e448bce65cf03aa3f5719228a0faf868629d98876b3d5fade3c053ac70506u
+b0s1=0x0af7f618a8f7513a5c17d41004fb57186d448974e5001f0ad7282f07dc9e0a98u
+b0s2=0x03545c771eb67286e01faec322464d255c43484737dbb942c16aeea1103628d0u
+b0s3=0x28abd4901fb2e7b22dd8dc74ece10b051a8ae13019252542294edc2bf42852abu
+b0j0c1x=0x19d99b0aa847886456ab1542e0892af1cbbdbb0bcf2481d01e2b064296c94303u
+b0j0c1y=0x2fd4eb33f20c6f14a41809b930381868c0f6e935c2a01c90cc60f8cb7c8505e4u
+b0j0c2x=0x159fd2c2d51efc351a18419cf235f538f7bd39bc2733eb57e11aaa9401de089au
+b0j0c2y=0x22237d10e62a38c0ca0f98649a891029031ec6980ce695d0c9c77f4cc9df10b6u
+b0j0a0x=0x1a8b1d491694753ec12930a8077eeac83fe51474fe7f062f91d28f9c5f45faaeu
+b0j0a0y=0x09cc92fe40c589ae56c6017ee1732a87f5194b1930daf657b65536e8d3e1b3dau
+b0j0b0x=0x0accfb668ac332e095dc95199c22ddd105635a468435d150fa33c3357c8de49cu
+b0j0b0y=0x2c44df2f68070165692df7b826cd868c88b0e169679c6f3794e677a625c1ddd2u
+b0j0a1x=0x0392ce880893d9e887f13e8edcdc72ed0abf8d464e6aa56ae84a8e07d3a28095u
+b0j0a1y=0x2552f05f98d3ace16a70085d59ede3bf0d261d04bfd703e9526ddb7c2e6ba750u
+b0j0b1x=0x1981b445327da47b57fabfa53234bbc437d6e0d8d38adfc3b067068579ed1bf1u
+b0j0b1y=0x0db20076bc7df7f1e9500aede4ec34a50ed762447dcc2b6af34ab46ae92d3e73u
+b0j0e0=0xbe41782850ca94cb952a4fda072e83eee5434ab898abd344e1a7f58c752c3870u
+b0j0e1=0x7434ecdb2938abf106302e42124863487cb21b1fd88257c557514a9994b27f32u
+b0j0z0=0x1b6a63a8e46adc13ad6321a5aeb4ab259b9b51fe49a99c772657a79f38bb4aaau
+b0j0z1=0x1c7fe1600f630339a1e67a44ea52e1efadc7649ae90d88ae5a246f920e0ecea6u
+b0j1c1x=0x17632c471eb5baf6f57784c2ab78176caf1845f618f996648f228442cd2a598eu
+b0j1c1y=0x166d6aa743f0e68fa2fdda9a6b3fd6b1e36714bc1ca3d38ae02aefde1c22cccau
+b0j1c2x=0x19aad7250ae98ca793974faf3e6942fe1845edeea01f381813ae6763edbe5e2eu
+b0j1c2y=0x0cfe8d6685599dd25cbfd02e2648a473f660d9ef8769a1f51d95927d0028d506u
+b0j1a0x=0x1db345e3b821a2419db431c6b7c8e5561d6020bb78eb1ce7659b4b3b43321335u
+b0j1a0y=0x0653e826ad9fc7f8dc198557cef369908a69ec117228e2b1f9820e9aad0512d7u
+b0j1b0x=0x0bb74ffc865da19daeb1a73b0c63af3baac80f48b4bbeeae359bc8d22827748au
+b0j1b0y=0x127ebb0d1b800ac0df09af50dc0ce29cecab8e8e73dec8806ca52db66533e042u
+b0j1a1x=0x1e615960b84503a7ed4976673ef83712c22d0e0c99ca92df045dcd6d039a62b6u
+b0j1a1y=0x1228db65e3c0644ed9815a73022cdae1f167b37170087dfbdfc8547ba256de35u
+b0j1b1x=0x2b1819d9a563ef2efa34ac6a368a9f800409b5ec411a4055baa83636676155eeu
+b0j1b1y=0x263213f9fbf11e918ec6b20cb0f15338cdcac5cbf84152f32e95dad02d71a17cu
+b0j1e0=0xb82f9f61927f9a599e5a1f3b8b86949021e5de001f2ceec426a11e0332c3ab56u
+b0j1e1=0x79a386639807d0e3fb814c8d2b2bd35817bbe13b6527181b172ffacee2517557u
+b0j1z0=0x1848643d884995881fe9143581bca3f22796a0b77e6d2e1c72eaee72b56a14b6u
+b0j1z1=0x2936cb03e4129e8dfea521300ab2f22697d49de40f46b7761a30948994662f32u
+b0sumax=0x0f40da95b3af6210be6b86338261e239f5f835379958762919c5a30a1d38eb79u
+b0sumay=0x11bf9418d6715e52d2dd65c9c7a15802a19962eb24f6a01b7304959c31010586u
+b0sumbx=0x304f707e55994cc0ba19687a6bc2faa9c6bbc4cf3fdab1092a9ee930d9956f39u
+b0sumby=0x0f4e35dad76340fd7b4eab125b6bacdac8fee5a57afd50cc16d2b955e9764729u
+b0sumz=0x008fd914cdd73ba9cffb284820f15932c0ea18b20947184e7972ee6d55166378u
+b1ix=0x0e1dcaf2266b3cceac64f0041047ea70b8b68ad2b735baebadddff048def4bc7u
+b1iy=0x0bc5825d77097f8901106851f78f80a12b4c6f1aff25f78a539e524ac964719fu
+b1j0c1x=0x25653dc2daab15a45605fa7fa43271b90e6717990540e3e1fa5700f2ac083622u
+b1j0c1y=0x10331a6c868f1cb03177c7ff1fee004d02595534d91f3599cde5311793089196u
+tlc2x=0x2b2d08481576d5b68b648410c291a2f8bc896ca8cfacc48e7aa2b48af35ce2fbu
+tlc2y=0x101b5b2c665a85c2e206ab6d9993b5aaca51b0bd958626d9b974cb24705ef4a1u
+tlkx=0x2c76a87f791e1f4d8bdcb7bb5ae116eb42729c1021112415de4395528e448197u
+tlky=0x0319dae7d43061ee60d42d9fbc77b0767e96d69a077631141d36360c63e80d87u
+trc2x=0x229fb27d30b30c900795978feb795536f8e7dbed2912390d25f891791b67bf8eu
+trc2y=0x0f6da5f1430b36c72cb18ec74c49f0b265c9e12898976128338f03704a1c80fbu
+trkx=0x0bf5c60c2216b5b8388dd7ce3a1a456bdf5df8310a9cfbe50be33de63b99ae65u
+trky=0x038cfbb48d31c51151d46dbcc0b44e11300221d291e3bb80712a9d9bd075e884u
+if ! deploy "$prog"; then
+  echo "FAIL ballot deploy: $(head -n 1 "$tmp/dump")"
+  fail=$((fail + 1))
+else
+  call "out b3b52a1ea6c078d39ccc8e706097e86410f81a8e05a7de9579f8b4b3c4d04a65" ballotCtx "$b0ix" "$b0iy"
+  call "out 1" slotBound "$b0ix" "$b0iy" 0u "$b0j0c1x" "$b0j0c1y" "$b0j0c2x" "$b0j0c2y" "$b0j0a0x" "$b0j0a0y" "$b0j0b0x" "$b0j0b0y" "$b0j0a1x" "$b0j0a1y" "$b0j0b1x" "$b0j0b1y" "$b0j0e0" "$b0j0e1" "$b0j0z0" "$b0j0z1"
+  call "out 1" slotBound "$b0ix" "$b0iy" 1u "$b0j1c1x" "$b0j1c1y" "$b0j1c2x" "$b0j1c2y" "$b0j1a0x" "$b0j1a0y" "$b0j1b0x" "$b0j1b0y" "$b0j1a1x" "$b0j1a1y" "$b0j1b1x" "$b0j1b1y" "$b0j1e0" "$b0j1e1" "$b0j1z0" "$b0j1z1"
+  call "out 0" slotBound "$b1ix" "$b1iy" 0u "$b0j0c1x" "$b0j0c1y" "$b0j0c2x" "$b0j0c2y" "$b0j0a0x" "$b0j0a0y" "$b0j0b0x" "$b0j0b0y" "$b0j0a1x" "$b0j0a1y" "$b0j0b1x" "$b0j0b1y" "$b0j0e0" "$b0j0e1" "$b0j0z0" "$b0j0z1"
+  call "out 1" sumBound "$b0ix" "$b0iy" "$b0j0c1x" "$b0j0c1y" "$b0j0c2x" "$b0j0c2y" "$b0j1c1x" "$b0j1c1y" "$b0j1c2x" "$b0j1c2y" "$b0sumax" "$b0sumay" "$b0sumbx" "$b0sumby" "$b0sumz"
+  call "out 1" ballotSig "$b0j0c1x" "$b0j0c1y" "$b0j0c2x" "$b0j0c2y" "$b0j1c1x" "$b0j1c1y" "$b0j1c2x" "$b0j1c2y" "$b0c1" "$b0s1" "$b0s2" "$b0s3" "$b0ix" "$b0iy"
+  call "out 0" ballotSig "$b1j0c1x" "$b1j0c1y" "$b0j0c2x" "$b0j0c2y" "$b0j1c1x" "$b0j1c1y" "$b0j1c2x" "$b0j1c2y" "$b0c1" "$b0s1" "$b0s2" "$b0s3" "$b0ix" "$b0iy"
+  call "out 1" openOk "$tlc2x" "$tlc2y" "$tlkx" "$tlky" 1u
+  call "out 1" openOk "$trc2x" "$trc2y" "$trkx" "$trky" 2u
+  call "out 1" openOk 0u 0u 0u 0u 0u
+  call "out 0" openOk 0u 0u 0u 0u 21888242871839275222246405745257275088548364400416034343698204186575808495617u
+  call "out 0" openOk "$tlc2x" "$tlc2y" "$tlkx" "$tlky" 21888242871839275222246405745257275088548364400416034343698204186575808495618u
+  call "out 1" verdict 1u 2u
+  call "out 0" verdict 1u 1u
+fi
+
 # The private cast of examples/zkcast.lang (S8 B3a): the ring (p0, p1) at poll 0.
 # The six words are the `dao b0` row of test/prove/expect.txt (choice, c_1, s_1,
 # s_2, I.x, I.y): six refusals revert (S8 B3b), the valid cast enters, count 1

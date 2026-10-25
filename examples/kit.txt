@@ -38,3 +38,4 @@ contest-ends.lang
 contest-neutral.lang
 ledger.lang
 ring.lang
+ballot.lang

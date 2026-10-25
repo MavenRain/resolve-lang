@@ -1,0 +1,8 @@
+-- REFUSE_LAW (resolve-lang S6 s2, a port of intent-lang 3df9d96, rule O7): a
+-- decision reads the opened tally only through a law. A def that opens the
+-- tally itself needs a Path or Trunc1 codomain, not Params.
+def Verdict : Type 0 := Sum Unit Unit
+def Hist : Type 0 := Verdict -> Size
+def Params : Type 0 := Prod Size Size
+def decideOpen : Quorum -> Enc Hist -> Params :=
+  fun (q : Quorum) (c : Enc Hist) => pair (open Hist q c (inl unit)) (open Hist q c (inr unit))

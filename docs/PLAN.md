@@ -410,8 +410,35 @@ code over `Verdict`.
   `keptNone` (no ballot keeps the first proposal) holds by `refl`. On the
   chain the word form is `flagIf (u256Le r l) 0u 1u`.
 
-O11 (the UAT regime) stays open: S6 s1 did not read
-MavenRain/self-referential-dao.
+S6 s2 (2026-10-25) builds P1 to P4 after the rulings Q-S6-1 to Q-S6-5
+(a). The ballot `ctx` and the signature use the dispute id `disputeId`
+(Q-S5-2 (a)) in place of poll 0. The ring is the tweaked ring `K_i + t G`
+with `t = hash(1, d) mod r`, and the signing key is `k_i + t mod r`. The
+eval row `imageGood` checks that the key image of the ballot of voter 0
+equals the key image of `sigA` in `examples/ring.lang`. Thus the encrypted
+ballot and the clear S5 ballot of one member in one dispute have one key
+image, and the S5 check against a second ballot applies to the encrypted
+ballot.
+
+The opening checks `opens` and `openSum` require a count below the BN254
+scalar order `r`. Without this bound, the curve equation also accepts
+`n + r` for a count of `n`, which can change the word majority. Zero and
+`r - 1` are canonical counts; `r` and larger counts are refused.
+
+O11 (read on 2026-10-25: MavenRain/self-referential-dao a965183,
+`README.md` and `DENOTATIONAL-DESIGN.md`). A DAO is in one of three UAT
+regimes. Arrow-Impossibility: no anonymous aggregation exists.
+Arrow-Debreu: the Lan is object-unique, so each configuration has one
+verdict. Schelling-Ising: two object-distinct Lans give two verdicts at one
+configuration. This regime needs an indiscrete target and cannot occur over
+a discrete target (`DENOTATIONAL-DESIGN.md:58`). The verdict of
+resolve-lang is `verdictOf : Hist -> Verdict`. It reads only the counts, so
+it is constant on the orbits of the member order (anonymous), and an
+aggregation exists. `Verdict` is a discrete type with two points, so the
+Schelling-Ising regime cannot occur. The binary verdict is in the
+Arrow-Debreu regime: each tally has one verdict. At a tie a neutral rule
+has two verdicts; Q7 (a) keeps `left`, so `verdictOf` is not neutral at a
+tie. At each other tally it is neutral (May). O11 is closed.
 
 ### 4.5 The chain fragment
 
@@ -632,6 +659,27 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
   the untweaked key each give the same key image (the leak). One row
   checks `modR` of the largest word. The rows of a dispute with the same
   outcome and of the tie are for S6 and S7.
+- As built (S6): `examples/tally.lang` (guest): `tieLeft` and `tieRight`
+  open the tie of two encrypted ballots to one vote each, and `tieVerdict`
+  gives `left` under `trunc1`. `vTie`, `vTieR` (the tie in the two orders)
+  and `v3L` give `left`; `vRR` and `v3` give `right` (P4). `kept` (a tie
+  keeps the old `Params` (1, 2)), `taken` (the majority takes the new
+  `Params` (2, 1)) and `takenVote` are the `decide` of Q-S6-4 (a).
+  `test/check/tally-leak.lang`: a def that opens one ballot gives
+  `REFUSE_LAW` (L10). `examples/ballot.lang` (kit): `ctxGood`,
+  `slotBoundGood`, `slotBound1Good`, `sumBoundGood` and `sigGood` give 1;
+  `slotCopied` and `sigTampered` give 0; `imageGood` gives 1 (4.4);
+  `tallyOpenLeft` and `tallyOpenRight` give 1 (the quorum {1, 2});
+  `verdictOpened` gives `1u` and `verdictTie` gives `0u`.
+  `openZero` and `openLastScalar` give 1; `openOrder`, `openAlias` and
+  `tallyOpenLeftAlias` give 0, including the full threshold opening with
+  a claimed count of `r + 1` instead of 1.
+  `test/precompile.sh`: 14 rows over the ballot views (the 9 rows of
+  intent-lang with the new words, and the `verdict` view at (1, 2) and at
+  (1, 1), plus the zero, `r` and `r + 1` opening cases).
+  `test/ballottool.c` computes the words and checks them ("ballot
+  regressions: passed"). The run rows of a dispute with the same outcome
+  and of the tie are S7 (Q-S6-5 (a)).
 
 ## 9. Slices
 
@@ -643,7 +691,7 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S3 | `Env.block` in the guest (O5); the `market` form (O4): `Reading`, `Outcome`, labels, `rule`, `answers`, `deadline`; rows of 4.2 | s1 DONE (2026-10-24): b1 `Env.block` (O5) is the intent-lang S8 b1 port, and `make -B check` EXIT 0 with the S2 counters except 50 examples (`blocks.lang`), 6 runs (`blocks.script`), 11 run refusals (a bad BLOCK), 17 lower refusals and 34 build checks (`env-block.lang`). The log is byte for byte the intent-lang S8 b1 log. The market design is 4.6. s2 DONE (2026-10-24): the market build after the USER rulings Q-S3-1 to Q-S3-5 (a) (section 1): the `market` keyword and `M.x` names in a program, `parse_market`, `check_market` (text elaboration), `examples/market.lang` (Rain and Heat), five check rows, one parse row, six eval rows and a fronttool `REFUSE_DATA` row. `make -B check` EXIT 0 with the s1 counters except 51 examples, 20 parse, 191 check and 23 kit-only refusals, and 194 evals. DONE |
 | S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | DONE (2026-10-24): `Contest` (4.1) in the domain; `Verdict`, `left`, `right`, `swap` and `verdictAt` as program `def`s (the S4 note of 4.1); `examples/contest-ends.lang` (L3, L4), `examples/contest-neutral.lang` (L6), `test/check/contest-wrong-end.lang` (`PATH_END`), two fronttool cell rows and four eval rows (section 8). `make -B check` EXIT 0 with the S3 counters except 53 examples, 192 check refusals and 198 evals. The domain change moves no other row. DONE |
 | S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | s1 DONE (2026-10-24): STEP 0 gate EXIT 0, byte for byte the S4 log; probes P1 to P3 (4.3); the tweak form of the key image replaces `Hp(K, poll)` (4.3), Q-S5-1 to Q-S5-3 OPEN; docs only. s2 DONE (2026-10-24): Q-S5-1 to Q-S5-3 RULED (a); `examples/ledger.lang` (L7), `examples/ring.lang` (L8, O10), two run scripts and 11 ring eval rows (section 8). `make -B check` EXIT 0 with the S4 counters except 55 examples, 209 evals and 8 runs. No blsagtool, precompile, host or DAO writer row moves. DONE |
-| S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | s1 DONE (2026-10-25): STEP 0 gate EXIT 0, byte for byte the S5 log; probes P1 to P4 (4.4); Q-S6-1 to Q-S6-5 OPEN; docs only. s2 NEXT |
+| S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | s1 DONE (2026-10-25): STEP 0 gate EXIT 0, byte for byte the S5 log; probes P1 to P4 (4.4); Q-S6-1 to Q-S6-5 OPEN; docs only. s2 DONE (2026-10-25): Q-S6-1 to Q-S6-5 RULED (a) (section 11); the port of intent-lang 3df9d96 (its S9) over `Verdict`: `examples/tally.lang` (guest, L9, `verdictOf`, `Params`), `examples/ballot.lang` (kit), `test/ballottool.c`, `test/check/tally-leak.lang` (L10), 28 eval rows and 14 precompile rows (section 8). The dispute id def is `disputeId`: `dispute` is a domain constructor, so a def with that name gives `REFUSE_NAME` (rule R4). `make -B check` EXIT 0 with the S5 counters except 57 examples, 193 check refusals, 237 evals, 157 precompile steps, and 14 "regressions: passed" lines (+ `ballot regressions: passed`). O11 and O12 CLOSED. DONE |
 | S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | |
 | S8 | mutants, SPEC, VALIDATION, close | |
 
@@ -684,13 +732,17 @@ Each item is RULED (S1, 2026-10-24) or kept as the builder call.
   kernel change (4.3, Q-S5-1). It needs a deployment-scoped dispute id;
   no hash to curve on chain requires the static route of Q-S5-2 (a).
   S5 s2: Q-S5-1 and Q-S5-2 RULED (a), built in `examples/ring.lang`.
-- O11 the UAT regime of a binary verdict (4.4). Kept: open until S6 s2 (S6 s1 did not read it).
+- O11 the UAT regime of a binary verdict (4.4). CLOSED (S6 s2): the
+  Arrow-Debreu regime, one verdict for each tally (4.4).
 - O12 intent-lang S9 built the encrypted ballots for its DAO at 3df9d96.
-  resolve-lang S6 s2 ports them for the verdict (4.4, Q-S6-2). Kept.
+  resolve-lang S6 s2 ports them for the verdict (4.4, Q-S6-2). CLOSED
+  (S6 s2): Q-S6-2 (a), ported.
 - O13 ecrecover comes with the port and has no use. Keep it (no removal
   work) or remove it in S2. Kept: S2 keeps ecrecover (section 6).
 - O14 the guest poll id is fixed to 0 (H:310). The dispute ballot needs a
-  poll id for each dispute: a change of the signature. Kept: S6 work.
+  poll id for each dispute: a change of the signature. S6 s2: the kit
+  ballot `ctx` and the signature use `disputeId` in place of poll 0
+  (4.4). Kept: the `ballot` entry of S7 takes the dispute id.
 - O15 `claim` needs division (stake times pool over winning pool). The kit
   U256 operations need a check in S5. Kept: Q8 (a) keeps `claim`.
 - O16 votes in few wallets: one member, one ballot (the ring and the key
@@ -800,6 +852,7 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   contest examples must drop their copies. S6 s2 must also probe that the
   domain accepts these `def`s. The domain change can move the fronttool
   domain rows and the check counters.
+  RULED: (a).
 - Q-S6-2 the source of the ballot code (4.4, P1 to P3). (a) Port
   intent-lang 3df9d96 (its S9): `examples/tally.lang` over `Verdict`,
   `examples/ballot.lang`, `test/ballottool.c`,
@@ -809,18 +862,21 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   the tweaked masked ring of `examples/ring.lang`. (b) Write the ballot
   from `examples/ring.lang`, `onehot.lang` and `threshold.lang`, and add a
   new host prover. That repeats the work of intent-lang S9.
+  RULED: (a).
 - Q-S6-3 the majority (4.4, P4). (a) `verdictOf h` is `right` only when
   the count of `right` is more than the count of `left`. A tie and the
   empty tally keep `left` (`i0`, the first proposal, Q7 (a)). On the
   chain: `flagIf (u256Le r l)` over the opened counts. (b) The same, and
   also a minimum count of ballots in `Params`: below it the first proposal
   stays. (b) adds a DAO decision.
+  RULED: (a).
 - Q-S6-4 `Params` (3.3). (a) `Params` is the pair `disputeWindow`,
   `voteWindow` (in blocks), with the `decide` of intent-lang: a pass takes
   the new `Params`, and a fail or a tie keeps the old. On the chain the two
   windows are state words that a DAO entry sets (the entry is S7).
   (b) One DAO decision for each window, each with the one-field `Params`
   of intent-lang. (b) has two polls for each change.
+  RULED: (a).
 - Q-S6-5 the scope of S6 s2. (a) S6 s2 builds the guest tally, the kit
   ballot views and their eval and precompile rows, as intent-lang S9 did.
   The `ballot` entry with the encrypted choice, the encrypted tally in the
@@ -830,3 +886,4 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   S7. (b) S6 s2 also replaces the clear `ballot` entry of
   `examples/ring.lang` with the encrypted one and adds `openTally` and the
   tie run row. (b) changes `test/run/ring.script` and its `.out`.
+  RULED: (a).

@@ -1,0 +1,111 @@
+-- The dispute tally (resolve-lang S6 s2, L9, PLAN 4.4), a port of intent-lang
+-- 3df9d96 examples/tally.lang over Verdict (Q-S6-2 (a)). A ballot is one Enc
+-- Hist, the one-hot histogram of a vote over Verdict. tallyEnc sums the n + 1
+-- ballots under Enc by encOp2, and count is the same sum on plain histograms.
+-- lawTallyEnc (L9) says the opening of the tally is the count of the
+-- decrypted ballots, and lawHist adds the one-hot premise. verdictOf is the
+-- majority (Q-S6-3 (a)): right only when the right count is above the left
+-- count, so a tie and the empty tally keep left (i0, the first proposal).
+-- Verdict, left, right and verdictAt are program defs (Q-S6-1 (a)).
+-- sizeAdd, sizeSub, leB and FinOf are copies from intent-lang
+-- examples/intent.lang.
+def sizeAdd : Size -> Size -> Size :=
+  fun (n : Size) (m : Size) => fold n (fun (r : Size) => szS r) m
+def sizeSub : Size -> Size -> Size :=
+  fun (a : Size) (b : Size) => fold a (fun (r : Size) => sizePred r) b
+def leB : Size -> Size -> Sum Unit Unit :=
+  fun (a : Size) (b : Size) => fold (inl unit) (fun (r : Sum Unit Unit) => inr unit) (sizeSub a b)
+def FinOf : Size -> Type 0 := fun (n : Size) => fold Unit (fun (r : Type 0) => Option r) n
+def Verdict : Type 0 := Sum Unit Unit
+def left : Verdict := inl unit
+def right : Verdict := inr unit
+def Hist : Type 0 := Verdict -> Size
+def Ballot : Type 0 := Enc Hist
+def Ballots : Size -> Type 0 := fun (n : Size) => FinOf n -> Ballot
+def addH : Hist -> Hist -> Hist :=
+  fun (h : Hist) (g : Hist) => fun (c : Verdict) => sizeAdd (h c) (g c)
+def ind : Verdict -> Verdict -> Size :=
+  fun (v : Verdict) (c : Verdict) =>
+  either (fun (u : Unit) => either (fun (w : Unit) => szS sz0) (fun (w : Unit) => sz0) c)
+    (fun (u : Unit) => either (fun (w : Unit) => sz0) (fun (w : Unit) => szS sz0) c) v
+def tallyEnc : (n : Size) -> Ballots n -> Ballot :=
+  fun (n : Size) => elim (fun (t : Size) => Ballots t -> Ballot)
+    (fun (bs : Ballots sz0) => bs unit)
+    (fun (k : Size) (ih : Ballots k -> Ballot) => fun (bs : Ballots (szS k)) =>
+      encOp2 Hist Hist Hist addH (bs none) (ih (fun (j : FinOf k) => bs (some j)))) n
+def count : (n : Size) -> (FinOf n -> Hist) -> Hist :=
+  fun (n : Size) => elim (fun (t : Size) => (FinOf t -> Hist) -> Hist)
+    (fun (hs : FinOf sz0 -> Hist) => hs unit)
+    (fun (k : Size) (ih : (FinOf k -> Hist) -> Hist) => fun (hs : FinOf (szS k) -> Hist) =>
+      addH (hs none) (ih (fun (j : FinOf k) => hs (some j)))) n
+def hist : (n : Size) -> (FinOf n -> Verdict) -> Hist :=
+  fun (n : Size) (v : FinOf n -> Verdict) => count n (fun (k : FinOf n) => ind (v k))
+def lawOp2H : (c1 : Ballot) -> (c2 : Ballot) ->
+  Path Hist (decrypt Hist (encOp2 Hist Hist Hist addH c1 c2)) (addH (decrypt Hist c1) (decrypt Hist c2)) :=
+  fun (c1 : Ballot) (c2 : Ballot) =>
+  elim (fun (d1 : Ballot) => Path Hist (decrypt Hist (encOp2 Hist Hist Hist addH d1 c2)) (addH (decrypt Hist d1) (decrypt Hist c2)))
+    (fun (a : Hist) => elim (fun (d2 : Ballot) => Path Hist (decrypt Hist (encOp2 Hist Hist Hist addH (encEta Hist a) d2)) (addH a (decrypt Hist d2)))
+      (fun (b : Hist) => refl) c2) c1
+def lawTallyEnc : (q : Quorum) -> (n : Size) -> (bs : Ballots n) ->
+  Path Hist (open Hist q (tallyEnc n bs)) (count n (fun (k : FinOf n) => decrypt Hist (bs k))) :=
+  fun (q : Quorum) (n : Size) =>
+  elim (fun (t : Size) => (bs : Ballots t) -> Path Hist (open Hist q (tallyEnc t bs)) (count t (fun (k : FinOf t) => decrypt Hist (bs k))))
+    (fun (bs : Ballots sz0) => refl)
+    (fun (k : Size) (ih : (bs : Ballots k) -> Path Hist (open Hist q (tallyEnc k bs)) (count k (fun (j : FinOf k) => decrypt Hist (bs j)))) =>
+      fun (bs : Ballots (szS k)) =>
+      trans Hist (decrypt Hist (tallyEnc (szS k) bs))
+        (addH (decrypt Hist (bs none)) (decrypt Hist (tallyEnc k (fun (j : FinOf k) => bs (some j)))))
+        (count (szS k) (fun (j : FinOf (szS k)) => decrypt Hist (bs j)))
+        (lawOp2H (bs none) (tallyEnc k (fun (j : FinOf k) => bs (some j))))
+        (fun (i : I) => addH (decrypt Hist (bs none)) (ih (fun (j : FinOf k) => bs (some j)) @ i))) n
+def lawHist : (q : Quorum) -> (n : Size) -> (bs : Ballots n) -> (v : FinOf n -> Verdict) ->
+  ((k : FinOf n) -> Path Hist (decrypt Hist (bs k)) (ind (v k))) ->
+  Path Hist (open Hist q (tallyEnc n bs)) (hist n v) :=
+  fun (q : Quorum) (n : Size) (bs : Ballots n) (v : FinOf n -> Verdict) (p : (k : FinOf n) -> Path Hist (decrypt Hist (bs k)) (ind (v k))) =>
+  trans Hist (open Hist q (tallyEnc n bs)) (count n (fun (k : FinOf n) => decrypt Hist (bs k))) (hist n v)
+    (lawTallyEnc q n bs) (fun (i : I) => count n (fun (k : FinOf n) => p k @ i))
+def verdictOf : Hist -> Verdict :=
+  fun (h : Hist) => either (fun (u : Unit) => right) (fun (u : Unit) => left) (leB (szS (h left)) (h right))
+def verdictAt : (A : Type 0) -> (x : Contest A) -> (y : Contest A) -> Path (Contest A) x y -> Verdict -> Contest A :=
+  fun (A : Type 0) => fun (x : Contest A) => fun (y : Contest A) => fun (d : Path (Contest A) x y) => fun (v : Verdict) =>
+    either (fun (u : Unit) => d @ i0) (fun (u : Unit) => d @ i1) v
+-- The kept proposal of a dispute from an opened tally.
+def keptOf : (A : Type 0) -> (x : Contest A) -> (y : Contest A) -> Path (Contest A) x y -> Hist -> Contest A :=
+  fun (A : Type 0) (x : Contest A) (y : Contest A) (d : Path (Contest A) x y) (h : Hist) => verdictAt A x y d (verdictOf h)
+-- The tie law for the empty tally: no ballot keeps the first proposal.
+def zeroH : Hist := fun (c : Verdict) => sz0
+def keptNone : (A : Type 0) -> (x : Contest A) -> (y : Contest A) -> (d : Path (Contest A) x y) ->
+  Path (Contest A) (keptOf A x y d zeroH) x :=
+  fun (A : Type 0) (x : Contest A) (y : Contest A) (d : Path (Contest A) x y) => refl
+-- Params (Q-S6-4 (a)): the dispute window and the vote window, in blocks.
+-- decide takes the new Params when verdictOf is right (a pass); a fail or a
+-- tie keeps the old Params.
+def Params : Type 0 := Prod Size Size
+def disputeWindow : Params -> Size := fun (p : Params) => first p
+def voteWindow : Params -> Size := fun (p : Params) => second p
+def decide : Hist -> Params -> Params -> Params :=
+  fun (h : Hist) (old : Params) (new : Params) => either (fun (u : Unit) => old) (fun (u : Unit) => new) (verdictOf h)
+-- Eval values: two ballots (n = 1) and three ballots (n = 2).
+def n1 : Size := szS sz0
+def n2 : Size := szS n1
+def votesTie : FinOf n1 -> Verdict := fun (k : FinOf n1) => option left (fun (u : Unit) => right) k
+def votesTieR : FinOf n1 -> Verdict := fun (k : FinOf n1) => option right (fun (u : Unit) => left) k
+def votesRR : FinOf n1 -> Verdict := fun (k : FinOf n1) => option right (fun (u : Unit) => right) k
+def votes3 : FinOf n2 -> Verdict :=
+  fun (k : FinOf n2) => option right (fun (j : FinOf n1) => option left (fun (u : Unit) => right) j) k
+def votes3L : FinOf n2 -> Verdict :=
+  fun (k : FinOf n2) => option left (fun (j : FinOf n1) => option right (fun (u : Unit) => left) j) k
+def ballotsTie : Ballots n1 := fun (k : FinOf n1) => encEta Hist (ind (votesTie k))
+def q2 : Quorum := quorum n2 (szS n2)
+def tieLeft : Trunc1 Size := trunc1 Size (open Hist q2 (tallyEnc n1 ballotsTie) left)
+def tieRight : Trunc1 Size := trunc1 Size (open Hist q2 (tallyEnc n1 ballotsTie) right)
+def tieVerdict : Trunc1 Verdict := trunc1 Verdict (verdictOf (open Hist q2 (tallyEnc n1 ballotsTie)))
+def vTie : Verdict := verdictOf (hist n1 votesTie)
+def vTieR : Verdict := verdictOf (hist n1 votesTieR)
+def vRR : Verdict := verdictOf (hist n1 votesRR)
+def v3 : Verdict := verdictOf (hist n2 votes3)
+def v3L : Verdict := verdictOf (hist n2 votes3L)
+-- The tie keeps the old Params (1, 2); the majority of v3 takes the new (2, 1).
+def kept : Params := decide (hist n1 votesTie) (pair n1 n2) (pair n2 n1)
+def taken : Params := decide (hist n2 votes3) (pair n1 n2) (pair n2 n1)
+def takenVote : Size := voteWindow taken
