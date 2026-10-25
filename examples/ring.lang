@@ -1,0 +1,151 @@
+-- The masked ring (resolve-lang S5, L8) and the key image for each dispute (O10, PLAN 4.3),
+-- under the rulings Q-S5-1 (a), Q-S5-2 (a) and Q-S5-3 (a). The markets and the ledger are those of ledger.lang.
+market Rain :=
+  sources rainfall
+  outcomes Yes | No
+  deadline 10u
+  rule fun (r : Rain.Reading) => flagIf (u256Le 50u (Rain.rainfall r)) Rain.Yes Rain.No
+  answers fun (o : Rain.Outcome) =>
+    elim (fun (x : Rain.Outcome) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) (inl v))) (pack 60u refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) (inr v))) (pack 10u refl) u) o
+
+market Wind :=
+  sources speed
+  outcomes Calm | Gale
+  deadline 20u
+  rule fun (r : Wind.Reading) => flagIf (u256Le (Wind.speed r) 30u) Wind.Calm Wind.Gale
+  answers fun (o : Wind.Outcome) =>
+    elim (fun (x : Wind.Outcome) => Sigma (r : Wind.Reading) (Path Wind.Outcome (Wind.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Wind.Reading) (Path Wind.Outcome (Wind.rule r) (inl v))) (pack 10u refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Wind.Reading) (Path Wind.Outcome (Wind.rule r) (inr v))) (pack 40u refl) u) o
+
+def known : U256 -> Flag := fun (m : U256) => u256Le m 1u
+def deadlineOf : U256 -> U256 := fun (m : U256) => flagIf (u256Eq m 0u) Rain.deadline Wind.deadline
+def key : U256 -> Addr -> U256 := fun (m : U256) (a : Addr) => hash m (addrToU256 a)
+
+-- BN254: the generator G and the order r of the group.
+def g : Prod U256 U256 := pair 1u 2u
+def frR : U256 := 21888242871839275222246405745257275088548364400416034343698204186575808495617u
+-- x mod r for each word: 2^256 - 1 is less than 6 r, thus five steps of the subtraction are sufficient.
+def reduceOnce : U256 -> U256 := fun (x : U256) => flagIf (u256Le frR x) (u256Sub x frR) x
+def modR : U256 -> U256 := fun (x : U256) => reduceOnce (reduceOnce (reduceOnce (reduceOnce (reduceOnce x))))
+-- x + t mod r, for x and t less than r.
+def shift : U256 -> U256 -> U256 := fun (x : U256) (t : U256) => reduceOnce (u256Add x t)
+
+-- The deployment domain binds the chain and the contract instance (Q-S5-2 (a)).
+-- It is fixed before compilation. A redeployment or another chain has a different domain.
+def domainOf : U256 -> Addr -> U256 := fun (c : U256) (a : Addr) => hash c (addrToU256 a)
+def chainId : U256 := 1u
+def deployment : U256 := domainOf chainId 0x00000000000000000000000000000000000000c1
+-- The domain separation tags of the tweak and of the NUMS points.
+def tweakTag : U256 := 1u
+def numsTag : U256 := 2u
+-- The dispute id of local market m in a domain: d = hash(domain, m).
+-- The tweak of dispute d: t_d = hash(tweakTag, d) mod r (the reduction is in the guest).
+def disputeIn : U256 -> U256 -> U256 := fun (dom : U256) (m : U256) => hash dom m
+def disputeOf : U256 -> U256 := fun (m : U256) => disputeIn deployment m
+def tweakOf : U256 -> U256 := fun (d : U256) => modR (hash tweakTag d)
+-- The eligible slot of a key K in dispute d: K + t_d G (Q-S5-1 (a)).
+def tweaked : U256 -> Prod U256 U256 -> Prod U256 U256 := fun (d : U256) (p : Prod U256 U256) => ecAdd p (ecMul g (tweakOf d))
+-- The NUMS point of slot i: N_i = H_p((hash(numsTag, i) mod r) G). Nobody knows its discrete log if H_p is a random oracle.
+def nums : U256 -> Prod U256 U256 := fun (i : U256) => zkHp (ecMul g (modR (hash numsTag i)))
+
+-- The charter (Q-S5-3 (a)): member i is the pair of the address a_i and the BN254 key K_i = k_i G,
+-- in the order of the ring. Member 2 is only in the charter of a different deployment (the eval rows).
+def k0 : U256 := zkKey 0
+def k1 : U256 := zkKey 1
+def k2 : U256 := zkKey 2
+def p0 : Prod U256 U256 := ecMul g k0
+def p1 : Prod U256 U256 := ecMul g k1
+def p2 : Prod U256 U256 := ecMul g k2
+def a0 : Addr := 0x00000000000000000000000000000000000000a0
+def a1 : Addr := 0x00000000000000000000000000000000000000a1
+
+state State := makeState (position : Map U256 U256) (used : Map U256 Flag) (tally : Map U256 U256)
+def init : State := makeState mapEmpty mapEmpty mapEmpty
+-- The slot of member i in market m: the tweaked key when the stake of a_i is 0, else N_i (L8).
+-- The deadline freezes the ledger, thus after the deadline this is the ring at the deadline.
+def slot : State -> U256 -> Addr -> Prod U256 U256 -> U256 -> Prod U256 U256 :=
+  fun (s : State) (m : U256) (a : Addr) (p : Prod U256 U256) (i : U256) =>
+    flagIf (u256Eq (mapGet (position s) (key m a)) 0u) (tweaked (disputeOf m) p) (nums i)
+def ring : State -> U256 -> List (Prod U256 U256) :=
+  fun (s : State) (m : U256) => cons (slot s m a0 p0 0u) (cons (slot s m a1 p1 1u) nil)
+-- Entry: the take of ledger.lang (L7).
+def take : (env : Env) -> (s : State) -> (m : U256) -> (x : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (m : U256) (x : U256) =>
+    flagIf (known m)
+      (flagIf (u256Le (deadlineOf m) (block env)) none
+        (some (pair (makeState (mapSet (position s) (key m (caller env)) (u256Add (mapGet (position s) (key m (caller env))) x)) (used s) (tally s)) nil)))
+      none
+-- Entry: a ballot in an unknown market or before the deadline reverts. A used key image reverts.
+-- A failed check over the masked ring reverts. Else the key image is recorded and the choice counted.
+-- The signed poll is the dispute id.
+def ballot : (env : Env) -> (s : State) -> (m choice c1 s1 s2 ix iy : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (m choice c1 s1 s2 ix iy : U256) =>
+    flagIf (known m)
+      (flagIf (u256Le (deadlineOf m) (block env))
+        (flagIf (mapGet (used s) (hash (hash ix iy) m))
+          none
+          (flagIf (zkVerify (ring s m) (disputeOf m) choice (cons c1 (cons s1 (cons s2 (cons ix (cons iy nil))))))
+            (some (pair (makeState (position s) (mapSet (used s) (hash (hash ix iy) m) flagYes)
+              (mapSet (tally s) (hash m choice) (u256Add (mapGet (tally s) (hash m choice)) 1u))) nil))
+            none))
+        none)
+      none
+-- View: the count of a choice in a market.
+def count : (env : Env) -> (s : State) -> (m choice : U256) -> U256 :=
+  fun (env : Env) (s : State) (m choice : U256) => mapGet (tally s) (hash m choice)
+
+-- The rings that the signers see at the deadline (test/run/ring.script).
+-- Market 0: member 1 has a stake, thus slot 1 is N_1. Market 1: no stakes.
+-- The signing key of a member in dispute d is k + t_d mod r: the wallet adds the tweak.
+def ringM0 : List (Prod U256 U256) := cons (tweaked (disputeOf 0u) p0) (cons (nums 1u) nil)
+def ringU0 : List (Prod U256 U256) := cons (tweaked (disputeOf 0u) p0) (cons (tweaked (disputeOf 0u) p1) nil)
+def ringU1 : List (Prod U256 U256) := cons (tweaked (disputeOf 1u) p0) (cons (tweaked (disputeOf 1u) p1) nil)
+def sigM00 : List U256 := zkSign ringM0 (shift k0 (tweakOf (disputeOf 0u))) (disputeOf 0u) 1u
+def sigU10 : List U256 := zkSign ringU0 (shift k1 (tweakOf (disputeOf 0u))) (disputeOf 0u) 1u
+def sigU01 : List U256 := zkSign ringU1 (shift k0 (tweakOf (disputeOf 1u))) (disputeOf 1u) 1u
+def sigU11 : List U256 := zkSign ringU1 (shift k1 (tweakOf (disputeOf 1u))) (disputeOf 1u) 0u
+
+-- Eval rows (test/eval/expect.txt, O10). The key image of a signature is its last two words.
+def wordCount : List U256 -> U256 := fun (w : List U256) => fold (fun (x : U256) (n : U256) => u256Add n 1u) 0u w
+def noWords : List U256 := nil
+def lastTwo : List U256 -> List U256 := fun (w : List U256) =>
+  fold (fun (x : U256) (acc : List U256) => flagIf (u256Le 2u (wordCount acc)) acc (cons x acc)) noWords w
+def keyImage : List U256 -> U256 := fun (w : List U256) => fold (fun (x : U256) (h : U256) => hash x h) 0u (lastTwo w)
+def sameImage : List U256 -> List U256 -> Flag := fun (v : List U256) (w : List U256) => u256Eq (keyImage v) (keyImage w)
+-- Member 0 in market 0 of four deployments. A is this contract, with the eligible set {K_0, K_1}.
+-- B is a different contract on the chain, with {K_0, K_2}. C is the address of A on a different chain.
+-- D is a redeployment of A on the chain.
+def idA : U256 := disputeOf 0u
+def idB : U256 := disputeIn (domainOf chainId 0x00000000000000000000000000000000000000c2) 0u
+def idC : U256 := disputeIn (domainOf 10u 0x00000000000000000000000000000000000000c1) 0u
+def idD : U256 := disputeIn (domainOf chainId 0x00000000000000000000000000000000000000c3) 0u
+def ringA : List (Prod U256 U256) := cons (tweaked idA p0) (cons (tweaked idA p1) nil)
+def ringB : List (Prod U256 U256) := cons (tweaked idB p0) (cons (tweaked idB p2) nil)
+def ringC : List (Prod U256 U256) := cons (tweaked idC p0) (cons (tweaked idC p1) nil)
+def ringD : List (Prod U256 U256) := cons (tweaked idD p0) (cons (tweaked idD p1) nil)
+def sigA : List U256 := zkSign ringA (shift k0 (tweakOf idA)) idA 1u
+def sigB : List U256 := zkSign ringB (shift k0 (tweakOf idB)) idB 1u
+def sigC : List U256 := zkSign ringC (shift k0 (tweakOf idC)) idC 1u
+def sigD : List U256 := zkSign ringD (shift k0 (tweakOf idD)) idD 1u
+def verA : Flag := zkVerify ringA idA 1u sigA
+def verB : Flag := zkVerify ringB idB 1u sigB
+def verC : Flag := zkVerify ringC idC 1u sigC
+def verD : Flag := zkVerify ringD idD 1u sigD
+def sameAB : Flag := sameImage sigA sigB
+def sameAC : Flag := sameImage sigA sigC
+def sameAD : Flag := sameImage sigA sigD
+-- Member 0 in markets 0 and 1 of A: two disputes, two key images.
+def sameDisputes : Flag := sameImage sigA sigU01
+-- The market-only form d = m (no domain): market 0 of two contracts with {K_0, K_1} and {K_0, K_2}
+-- gives the same key image, thus the intersection of the two sets identifies K_0.
+def sigOnly1 : List U256 := zkSign (cons (tweaked 0u p0) (cons (tweaked 0u p1) nil)) (shift k0 (tweakOf 0u)) 0u 1u
+def sigOnly2 : List U256 := zkSign (cons (tweaked 0u p0) (cons (tweaked 0u p2) nil)) (shift k0 (tweakOf 0u)) 0u 1u
+def sameOnly : Flag := sameImage sigOnly1 sigOnly2
+-- The key image x * H_p(K) with no tweak (the survey finding of 4.3): the same in two disputes.
+def ringP : List (Prod U256 U256) := cons p0 (cons p1 nil)
+def samePlain : Flag := sameImage (zkSign ringP k0 idA 1u) (zkSign ringP k0 (disputeOf 1u) 1u)
+-- The guest reduction of the largest word.
+def maxMod : U256 := modR 115792089237316195423570985008687907853269984665640564039457584007913129639935u

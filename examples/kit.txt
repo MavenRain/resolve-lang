@@ -36,3 +36,5 @@ blocks.lang
 market.lang
 contest-ends.lang
 contest-neutral.lang
+ledger.lang
+ring.lang

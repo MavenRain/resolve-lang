@@ -339,6 +339,18 @@ nobody knows its discrete log if `H_p` is a random oracle. S7 must lower a
 `zkVerify` whose slots are `flagIf c P Q` over closed points; the unroll
 now needs a closed point in each slot (`zk_ring` in `front/eval.c`).
 
+S5 s2 (2026-10-24): the USER ruled Q-S5-1 (a), Q-S5-2 (a) and Q-S5-3
+(a), and `examples/ring.lang` builds that form. The deployment domain is
+`hash(chainId, instance)`, a `def` fixed before compilation. The tweak
+`t_d = hash(1, d) mod r` does the reduction in the guest: `modR` does five
+steps of the subtraction of `r`, because `2^256 - 1 < 6 r`. `zkKey` takes
+only a Nat, thus it cannot reduce a hash. The NUMS point is
+`N_i = zkHp (ecMul g (modR (hash 2 i)))`. The charter lists the members
+as pairs of an address and a key, in the order of the ring. A ballot
+reverts in an unknown market and before the deadline of the market, and
+the poll that the member signs is `d`. `dispute` is a domain constructor
+(rule R4), thus the guest calls the dispute id `disputeOf`.
+
 Limit, stated in SPEC as a non-goal: the proof covers the stake that the
 member's registered key holds in this market's ledger. A stake through
 another wallet, another venue or an off-chain hedge is outside any on-chain
@@ -571,6 +583,20 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
   checks that a contract compiled for one deployment domain refuses a
   different chain or contract instance; the wallet rejects a domain
   mismatch before signing (4.3).
+- As built (S5): `test/run/ledger.script`: a `take` at the deadline of
+  each market reverts, and a `take` in an unknown market reverts.
+  `test/run/ring.script`: a ballot before the deadline reverts; a ballot
+  from member 1, who has a stake, fails the check over the masked ring; a
+  second ballot with the same key image reverts; a `take` after the
+  deadline reverts; one ballot in each of two disputes counts. The ring
+  eval rows: member 0 signs in market 0 of deployments A (this contract,
+  `{K_0, K_1}`), B (a different contract, `{K_0, K_2}`), C (a different
+  chain) and D (a redeployment). Each signature verifies, and the key
+  image in A differs from the key image in B, C and D. Member 0 has two
+  key images in markets 0 and 1 of A. The market-only form `d = m` and
+  the untweaked key each give the same key image (the leak). One row
+  checks `modR` of the largest word. The rows of a dispute with the same
+  outcome and of the tie are for S6 and S7.
 
 ## 9. Slices
 
@@ -581,8 +607,8 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S2 | port intent-lang ef5abe8 (section 6); gate = the intent-lang S7 counters | DONE: `make -B check` EXIT 0 with the intent-lang S7 counters: 49 examples, 0 failed; 19 parse, 186 check and 22 kit-only refusals; 188 evals, 2 proves; contracts 2 written and 5 refused; rings 6 built and 2 refused; 28 guest and 14 host differential rows; 5 runs, 10 run refusals; 8 asmtool; 3 builds, 16 lower refusals, 33 build checks; 20 dispatch; 43 evm steps; 14 precompile rows and 143 steps; 13 mock rows; 15 diff rows; 24 emit regressions; the 13 "regressions: passed" lines; 0 failures. The log is byte for byte the intent-lang S7 log (section 6) |
 | S3 | `Env.block` in the guest (O5); the `market` form (O4): `Reading`, `Outcome`, labels, `rule`, `answers`, `deadline`; rows of 4.2 | s1 DONE (2026-10-24): b1 `Env.block` (O5) is the intent-lang S8 b1 port, and `make -B check` EXIT 0 with the S2 counters except 50 examples (`blocks.lang`), 6 runs (`blocks.script`), 11 run refusals (a bad BLOCK), 17 lower refusals and 34 build checks (`env-block.lang`). The log is byte for byte the intent-lang S8 b1 log. The market design is 4.6. s2 DONE (2026-10-24): the market build after the USER rulings Q-S3-1 to Q-S3-5 (a) (section 1): the `market` keyword and `M.x` names in a program, `parse_market`, `check_market` (text elaboration), `examples/market.lang` (Rain and Heat), five check rows, one parse row, six eval rows and a fronttool `REFUSE_DATA` row. `make -B check` EXIT 0 with the s1 counters except 51 examples, 20 parse, 191 check and 23 kit-only refusals, and 194 evals. DONE |
 | S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | DONE (2026-10-24): `Contest` (4.1) in the domain; `Verdict`, `left`, `right`, `swap` and `verdictAt` as program `def`s (the S4 note of 4.1); `examples/contest-ends.lang` (L3, L4), `examples/contest-neutral.lang` (L6), `test/check/contest-wrong-end.lang` (`PATH_END`), two fronttool cell rows and four eval rows (section 8). `make -B check` EXIT 0 with the S3 counters except 53 examples, 192 check refusals and 198 evals. The domain change moves no other row. DONE |
-| S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | s1 DONE (2026-10-24): STEP 0 gate EXIT 0, byte for byte the S4 log; probes P1 to P3 (4.3); the tweak form of the key image replaces `Hp(K, poll)` (4.3), Q-S5-1 to Q-S5-3 OPEN; docs only. s2 (the build) NEXT after the rulings |
-| S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | |
+| S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | s1 DONE (2026-10-24): STEP 0 gate EXIT 0, byte for byte the S4 log; probes P1 to P3 (4.3); the tweak form of the key image replaces `Hp(K, poll)` (4.3), Q-S5-1 to Q-S5-3 OPEN; docs only. s2 DONE (2026-10-24): Q-S5-1 to Q-S5-3 RULED (a); `examples/ledger.lang` (L7), `examples/ring.lang` (L8, O10), two run scripts and 11 ring eval rows (section 8). `make -B check` EXIT 0 with the S4 counters except 55 examples, 209 evals and 8 runs. No blsagtool, precompile, host or DAO writer row moves. DONE |
+| S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | NEXT |
 | S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | |
 | S8 | mutants, SPEC, VALIDATION, close | |
 
@@ -622,6 +648,7 @@ Each item is RULED (S1, 2026-10-24) or kept as the builder call.
   S5 s1: the probes give the key image of a tweaked key, with no bLSAG
   kernel change (4.3, Q-S5-1). It needs a deployment-scoped dispute id;
   no hash to curve on chain requires the static route of Q-S5-2 (a).
+  S5 s2: Q-S5-1 and Q-S5-2 RULED (a), built in `examples/ring.lang`.
 - O11 the UAT regime of a binary verdict (4.4). Kept: open until S6.
 - O12 intent-lang S9 builds the same encrypted ballots for its DAO.
   resolve-lang S6 builds them for the verdict. Later, one of the two ports
@@ -708,6 +735,7 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   `blsag.c`, `front/eval.c` and their rows, and the DAO writer (with
   `pollId` in the state) then needs a hash to curve on chain (MODEXP 0x05),
   or a second pair of `zkSign` and `zkVerify` ops for disputes.
+  RULED: (a).
 - Q-S5-2 the dispute id. (a) A deployment-scoped market id:
   `d = hash(deploymentDomain, m)` for local market index `m`. The domain
   binds the intended chain and contract instance and is fixed before
@@ -720,8 +748,10 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   deployment-scoped dispute counter in the state, for more than one
   dispute in a market: each slot then needs `H_p` for each new dispute,
   on chain unless a separate precomputation design supplies it.
+  RULED: (a).
 - Q-S5-3 the binding of a member to an address. (a) The charter lists each
   member as a pair of an address and a BN254 key, in the member order of
   the ring; `Eligible M k` reads the stake of that address. (b) A member
   entry binds an address to a key with a Schnorr proof by the key; the
   binding is then state, and the DAO does not list addresses.
+  RULED: (a).

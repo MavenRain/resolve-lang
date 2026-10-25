@@ -1,0 +1,40 @@
+-- The position ledger and the freeze (resolve-lang S5, L7, PLAN 4.3).
+-- Market 0 is Rain and market 1 is Wind. The deadline of each market comes from its market form.
+-- One Map holds the stakes of all markets: the key of a stake is hash m (addrToU256 a).
+market Rain :=
+  sources rainfall
+  outcomes Yes | No
+  deadline 10u
+  rule fun (r : Rain.Reading) => flagIf (u256Le 50u (Rain.rainfall r)) Rain.Yes Rain.No
+  answers fun (o : Rain.Outcome) =>
+    elim (fun (x : Rain.Outcome) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) (inl v))) (pack 60u refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) (inr v))) (pack 10u refl) u) o
+
+market Wind :=
+  sources speed
+  outcomes Calm | Gale
+  deadline 20u
+  rule fun (r : Wind.Reading) => flagIf (u256Le (Wind.speed r) 30u) Wind.Calm Wind.Gale
+  answers fun (o : Wind.Outcome) =>
+    elim (fun (x : Wind.Outcome) => Sigma (r : Wind.Reading) (Path Wind.Outcome (Wind.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Wind.Reading) (Path Wind.Outcome (Wind.rule r) (inl v))) (pack 10u refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Wind.Reading) (Path Wind.Outcome (Wind.rule r) (inr v))) (pack 40u refl) u) o
+
+-- The closed list of markets: index 0 and index 1.
+def known : U256 -> Flag := fun (m : U256) => u256Le m 1u
+def deadlineOf : U256 -> U256 := fun (m : U256) => flagIf (u256Eq m 0u) Rain.deadline Wind.deadline
+def key : U256 -> Addr -> U256 := fun (m : U256) (a : Addr) => hash m (addrToU256 a)
+state State := makeState (position : Map U256 U256)
+def init : State := makeState mapEmpty
+-- Entry: a take in an unknown market reverts. A take at a block at or after the deadline
+-- of the market reverts (L7). Else the stake of the caller grows.
+def take : (env : Env) -> (s : State) -> (m : U256) -> (x : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (m : U256) (x : U256) =>
+    flagIf (known m)
+      (flagIf (u256Le (deadlineOf m) (block env)) none
+        (some (pair (makeState (mapSet (position s) (key m (caller env)) (u256Add (mapGet (position s) (key m (caller env))) x))) nil)))
+      none
+-- View: the stake of an address in a market.
+def stake : (env : Env) -> (s : State) -> (m : U256) -> (a : Addr) -> U256 :=
+  fun (env : Env) (s : State) (m : U256) (a : Addr) => mapGet (position s) (key m a)

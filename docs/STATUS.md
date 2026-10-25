@@ -55,6 +55,16 @@
   hold by `refl` (`examples/contest-ends.lang`,
   `examples/contest-neutral.lang`). A wrong end gives `PATH_END`, and a
   dispute end of the type parameter gives `REFUSE_CELL` (fronttool).
+- S5 (the ledger, the freeze, the masked ring, O10; Q-S5-1 to Q-S5-3
+  RULED (a)): `examples/ledger.lang` keeps the stakes of all markets in
+  one `Map`, keyed by `hash m (addrToU256 a)`. The deadline of each market
+  comes from its `market` form, and a `take` at the deadline or after it
+  reverts (L7). `examples/ring.lang` puts a NUMS point in the slot of a
+  member with a stake (L8). Each dispute has a key image: the slot is
+  `K_i + t_d G`, with `t_d = hash(tag, d) mod r` and the
+  deployment-scoped id `d = hash(domain, m)` (PLAN 4.3). Two run scripts
+  and 11 ring eval rows test it. S7 lowers the ring and enforces the
+  deployment domain.
 
 ## Remaining M0 work
 
