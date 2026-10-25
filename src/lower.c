@@ -620,9 +620,10 @@ static const IrExpr *lower_expr(Low *l, Stmts *b, const Value *v) {
   if (field_of(v, 1u, &f) && form_at(l, f) == FORM_WORD) return ir_sload(l, ir_const(l, f));
   if (field_of(v, 0u, &f) && l->env != NULL && f < l->env->field_count) {
     const char *name = l->env->fields[f].name;
-    IrExpr *e = strcmp(name, "now") == 0 || strcmp(name, "caller") == 0 ? new_expr(l, IR_EXPR_ENV) : NULL;
-    if (e != NULL) e->field = strcmp(name, "now") == 0 ? IR_ENV_NOW : IR_ENV_CALLER;
-    return e != NULL ? e : (refuse(l, v, "(an Env field that is not now or caller)"), NULL);
+    int now = strcmp(name, "now") == 0, block = strcmp(name, "block") == 0;
+    IrExpr *e = now || block || strcmp(name, "caller") == 0 ? new_expr(l, IR_EXPR_ENV) : NULL;
+    if (e != NULL) e->field = now ? IR_ENV_NOW : block ? IR_ENV_BLOCK : IR_ENV_CALLER;
+    return e != NULL ? e : (refuse(l, v, "(an Env field that is not now, block or caller)"), NULL);
   }
   if (is_op(v, OP_TO_U256) && v->argc == 1) return lower_expr(l, b, v->args[0]);
   if (is_op(v, OP_ADDR_TO_U256) && v->argc == 1) return lower_expr(l, b, v->args[0]);

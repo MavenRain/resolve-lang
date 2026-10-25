@@ -1,7 +1,7 @@
 #!/bin/sh
 # The chain gate (slice K4c, O-s11-1). For each call script below, deploy the
 # program with `evm run --create`, then do one `evm run --prestate --dump`
-# step for each call of the script. After each step, the storage must equal
+# step for each call of the script (a t8n step at BLOCK > 0 for blocks.script, S10). After each step, the storage must equal
 # the state that `langc run` prints for the calls up to that step, and the
 # result must agree with the result of the call: ok, revert (`none`) or trap
 # (the Trap() selector). A view call must return the 32-byte word of the view
@@ -128,6 +128,11 @@ chain examples/events.lang test/run/events.script
 chain examples/lists.lang test/run/lists.script
 # test/same-state.lang: the entry ping keeps the state and emits one LOG1 (O-d7-1).
 chain test/same-state.lang test/same-state.script
+# test/run/blocks.script (S10, O36): its call is at NOW 1 and BLOCK 42 from the
+# t8n key address, a t8n step at NUMBER 42.
+numbered=1
+chain examples/blocks.lang test/run/blocks.script
+numbered=0
 
 rm -rf "$tmp"
 echo "evm steps: $steps checked"

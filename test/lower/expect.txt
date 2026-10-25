@@ -14,4 +14,3 @@ path-word.lang REFUSE_LOWER
 loop-word.lang REFUSE_LOWER
 orbit-word.lang REFUSE_LOWER
 glue-word.lang REFUSE_LOWER
-env-block.lang REFUSE_LOWER

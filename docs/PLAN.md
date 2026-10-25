@@ -609,6 +609,23 @@ contract decides, and a size over EIP-170 is a STOP. The compiler work
 contract work are each about the size of intent-lang S10, thus S7 needs
 three build sessions (Q-S7-4).
 
+S7 s2 (2026-10-25): the USER ruled Q-S7-1 to Q-S7-8 (a) (section 11). Part
+b1 is built. It is the port of intent-lang 79e1898: the `src/` diff
+(`IR_ENV_BLOCK`; `env_op` emits NUMBER (0x43) for `block`), the t8n route
+of `test/evmchain.sh` (a chain with `numbered=1` runs each step at BLOCK
+more than 0 on `evm t8n` from the t8n key address), and the `blocks` chain
+of `test/evm.sh`. `test/lower/env-block.lang` leaves the refusal list.
+`test/run/blocks.script` runs at NOW 1 and BLOCK 42. The gate counters are
+the S7 s1 counters except the lower line (16 refusals and 33 checks, were
+17 and 34) and 44 evm steps (was 43). Parts b2 (the ring lowering of
+Q-S7-3), b3 (the `Env` fields of Q-S7-6) and b4 (`u256Mul` and `u256Div`
+of Q-S7-7) are the s2 resume. Two facts for b2: `zkVerify` gets its
+verifier term in the evaluator (`zk_unroll` in `src/front/eval.c`), not in
+`src/lower.c`. `blsag_hash_point` starts at counter 0 for each point, thus
+each leaf `H_p` is a build constant, but the ring digest D folds the hash
+over all ring points, thus with a selected ring D is a term of the selected
+points.
+
 ## 5. Laws
 
 | Law | Statement | How it holds |
@@ -753,6 +770,9 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
   `test/ballottool.c` computes the words and checks them ("ballot
   regressions: passed"). The run rows of a dispute with the same outcome
   and of the tie are S7 (Q-S6-5 (a)).
+- As built (S7 s2 b1): `test/run/blocks.script` runs on the t8n route of
+  `test/evm.sh` at NUMBER 42 (one evm step), and the state gets 42u.
+  `test/lower/env-block.lang` is not a refusal row now: `Env.block` lowers.
 
 ## 9. Slices
 
@@ -765,7 +785,7 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | DONE (2026-10-24): `Contest` (4.1) in the domain; `Verdict`, `left`, `right`, `swap` and `verdictAt` as program `def`s (the S4 note of 4.1); `examples/contest-ends.lang` (L3, L4), `examples/contest-neutral.lang` (L6), `test/check/contest-wrong-end.lang` (`PATH_END`), two fronttool cell rows and four eval rows (section 8). `make -B check` EXIT 0 with the S3 counters except 53 examples, 192 check refusals and 198 evals. The domain change moves no other row. DONE |
 | S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | s1 DONE (2026-10-24): STEP 0 gate EXIT 0, byte for byte the S4 log; probes P1 to P3 (4.3); the tweak form of the key image replaces `Hp(K, poll)` (4.3), Q-S5-1 to Q-S5-3 OPEN; docs only. s2 DONE (2026-10-24): Q-S5-1 to Q-S5-3 RULED (a); `examples/ledger.lang` (L7), `examples/ring.lang` (L8, O10), two run scripts and 11 ring eval rows (section 8). `make -B check` EXIT 0 with the S4 counters except 55 examples, 209 evals and 8 runs. No blsagtool, precompile, host or DAO writer row moves. DONE |
 | S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | s1 DONE (2026-10-25): STEP 0 gate EXIT 0, byte for byte the S5 log; probes P1 to P4 (4.4); Q-S6-1 to Q-S6-5 OPEN; docs only. s2 DONE (2026-10-25): Q-S6-1 to Q-S6-5 RULED (a) (section 11); the port of intent-lang 3df9d96 (its S9) over `Verdict`: `examples/tally.lang` (guest, L9, `verdictOf`, `Params`), `examples/ballot.lang` (kit), `test/ballottool.c`, `test/check/tally-leak.lang` (L10), 28 eval rows and 14 precompile rows (section 8). The dispute id def is `disputeId`: `dispute` is a domain constructor, so a def with that name gives `REFUSE_NAME` (rule R4). `make -B check` EXIT 0 with the S5 counters except 57 examples, 193 check refusals, 237 evals, 157 precompile steps, and 14 "regressions: passed" lines (+ `ballot regressions: passed`). O11 and O12 CLOSED. DONE |
-| S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 NEXT. |
+| S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 b1 DONE (2026-10-25): STEP 0 at the USER commit 29eaec4 (tree 80268401: the S7 s1 tree and a USER edit of the cast to four calls); the USER ruled Q-S7-1 to Q-S7-8 (a); the NUMBER port and the t8n route of intent-lang 79e1898 (4.7); gate EXIT 0 with the S7 s1 counters except 16 lower refusals, 33 lower checks and 44 evm steps. b2, b3 and b4 NEXT (s2 resume). |
 | S8 | mutants, SPEC, VALIDATION, close | |
 
 ## 10. Open items
@@ -967,7 +987,7 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   (a) `challenge`. It is a short ABI name, and it does not repeat a domain
   name. Section 7 and the event `Disputed` keep the word "dispute".
   (b) `disputeEntry`, with the form of `disputeId` (S6).
-  RECOMMENDED: (a).
+  RULED: (a).
 - Q-S7-2 the port source and the form of the contract (4.7, survey).
   (a) Port intent-lang 79e1898 (its S10): the NUMBER lowering (the `src/`
   diff applies to HEAD with no fuzz, P3), the `evm t8n` route of
@@ -978,7 +998,7 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   (`examples/resolvekit.lang`). `src/front/writer.c` and its rows do not
   change. (b) `writer.c` gets an encrypted mode that writes the contract
   from the program. (b) has no source to port.
-  RECOMMENDED: (a).
+  RULED: (a).
 - Q-S7-3 the masked ring in the contract (4.7, P2). K4c lowers `zkVerify`
   only over a closed ring, and one verifier is about 3.5 kB. With 2^n rings
   for each market, the contract is over EIP-170. (a) Extend the K4c
@@ -991,7 +1011,7 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   = 27 kB, also over EIP-170. (c) The contract ring has all tweaked keys
   and no mask, and L8 comes from another route. (c) changes the design
   (4.3).
-  RECOMMENDED: (a).
+  RULED: (a).
 - Q-S7-4 the split of S7 (4.7, P5). (a) Three build sessions. s2: the
   compiler: the NUMBER port and the t8n route, the ring lowering of Q-S7-3,
   the `Env` fields of Q-S7-6 and the U256 operations of Q-S7-7, with their
@@ -1002,7 +1022,7 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   S7 close. (b) Two build sessions: s2 the compiler and the contract, s3
   the run rows. (b) puts about two times the work of intent-lang S10 in
   one session.
-  RECOMMENDED: (a).
+  RULED: (a).
 - Q-S7-5 the `Params` DAO entry (4.7, P4). (a) The DAO poll is poll 0 of
   the same cast entries, and the dispute of market m is poll m + 1. The
   tally words, `casts` and the stage of a key image are maps keyed by the
@@ -1015,7 +1035,7 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   DAO (the daokit port with two window words), and the market contract
   reads the windows by a view call. The kit has no view call to another
   contract. (c) The windows are build constants, and the DAO entry is S8.
-  RECOMMENDED: (a).
+  RULED: (a).
 - Q-S7-6 the row "a contract for one deployment domain refuses another
   chain or contract instance" (section 8). The domain is a build constant
   (Q-S5-2 (a)), and the kit `Env` has no chain id and no contract address
@@ -1029,7 +1049,7 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   check fails. A copy of the bytecode on another chain or at another
   address is not refused, and its key images repeat the key images of the
   first contract (a limit in the docs).
-  RECOMMENDED: (a).
+  RULED: (a).
 - Q-S7-7 `claim` and U256 division (O15, 4.7, P4). The kit has no
   multiplication and no division. (a) Add `u256Mul` (EVM MUL, modulo
   2^256) and `u256Div` (EVM DIV, x / 0 = 0) as kit operations in the
@@ -1038,7 +1058,7 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   product wraps (the check: the product divided by the stake is the pool).
   (b) `claim` pays back the stake only. (b) changes Q8 (a). (c) `claim` is
   S8.
-  RECOMMENDED: (a).
+  RULED: (a).
 - Q-S7-8 the tie row, the same-outcome row and `examples/ring.lang`
   (section 8, Q-S6-5 (a)). (a) Both rows are in the run script of the
   contract (`test/run/resolvekit.script`, on the guest and on the EVM
@@ -1050,4 +1070,4 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   (b) `examples/ring.lang` and `test/run/ring.script` do not change. They
   stay the S5 guest reference of L8, and only the contract script gets the
   new rows.
-  RECOMMENDED: (a).
+  RULED: (a).

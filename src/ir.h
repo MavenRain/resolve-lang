@@ -54,6 +54,7 @@ typedef enum {
 /* The call data that IR_EXPR_ENV reads (C-K4-12). */
 typedef enum {
   IR_ENV_NOW,   /* the block time: EVM TIMESTAMP */
+  IR_ENV_BLOCK, /* the block number: EVM NUMBER (S10, O17) */
   IR_ENV_CALLER /* the sender: EVM CALLER */
 } IrEnv;
 
