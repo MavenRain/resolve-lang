@@ -292,6 +292,53 @@ image for each dispute, `I = x * Hp(K, poll)` (O10). The cost is one hash
 to curve for each slot for each dispute, on chain (MODEXP 0x05 for the
 square root).
 
+S5 s1 probes (2026-10-24, ~/Documents/resolve-lang-work/S5-probes,
+Q-S5-1 to Q-S5-3 OPEN). P1: a state `Map U256 U256` keyed by
+`hash m (addrToU256 a)` holds the stakes of all markets; a `take` at a block
+before the deadline adds to the stake, and a `take` at the deadline or after
+it reverts (L7). P2: the slot of member `i` is `flagIf` of the stake test,
+over two closed points; when member 1 has a stake, a ballot that member 1
+signs over the unmasked ring reverts, and `zkSign` over the masked ring
+traps, because the key of member 1 is not in it (L8). A second ballot with
+the same key image reverts. P3: the test confirms the survey finding. The
+key image of member 0 at poll 0 and at poll 1 is the same point.
+
+The probes show that the form `I = x * Hp(K, poll)` is not necessary, and
+that it costs more than the plan says. `H_p` in `front/blsag.c` reads only
+the point. To bind the poll, the kernel must change `blsag.c`, the `zkHp`
+and unroll code of `front/eval.c`, and the blsagtool and precompile rows.
+The DAO writer keeps `pollId` in the state, so its verifier can then not
+fold `H_p` at compile time, and needs a hash to curve on chain. Proposed
+form (Q-S5-1 (a)), with no bLSAG kernel change: dispute `d` has the public tweak
+`t_d = hash(tag, d) mod r`. The eligible slot of member `i` is
+`K_i + t_d G`, and the member signs with the key `x_i + t_d mod r`. Then
+`I_d = (x_i + t_d) * Hp(K_i + t_d G)`. In P3, member 0 gets two different
+key images in disputes 0 and 1, and both ballots count. This tests two
+indices within one deployment. The dispute id must also separate
+deployments: for local market index `m`, use
+`d = hash(deploymentDomain, m)`, where `deploymentDomain` binds the intended
+chain and contract instance. Under the market-only form `d = m`, two
+contracts' market 0 ballots by the same member have equal key images,
+even with eligible sets `{K_0, K_1}` and `{K_0, K_2}`; their intersection
+identifies `K_0`. A C probe against `front/blsag.c` reproduces two valid
+signatures with equal images, and different images with the scoped form.
+For distinct scoped ids, the working anonymity assumptions are DDH in G1
+and random-oracle hashes, as for bLSAG; P3 is not a security proof.
+
+The static route (Q-S5-2 (a)) requires the deployment domain before
+compilation. The writer must bind that compiled domain to the actual chain
+and contract instance, refusing execution at a different target, and the
+wallet must check it before signing. A redeployment or another chain needs
+a different domain and a new build. With that domain and the closed market
+list, each `t_d`, each slot point and each `H_p` is a compile-time constant,
+so the chain needs no hash to curve (no MODEXP). If the domain is known only
+at runtime, that constant-folding claim does not apply; S7 then needs a
+runtime hash-to-curve route or a separate precomputation design.
+The NUMS point is `N_i = H_p((hash(tag', i) mod r) G)` (builder default):
+nobody knows its discrete log if `H_p` is a random oracle. S7 must lower a
+`zkVerify` whose slots are `flagIf c P Q` over closed points; the unroll
+now needs a closed point in each slot (`zk_ring` in `front/eval.c`).
+
 Limit, stated in SPEC as a non-goal: the proof covers the stake that the
 member's registered key holds in this market's ledger. A stake through
 another wallet, another venue or an off-chain hedge is outside any on-chain
@@ -518,7 +565,12 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
   stake fails the ring check; a second ballot with the same key image is
   refused; a tie keeps the first proposal.
 - Ring rows: the same member in two disputes gives two different key
-  images (O10).
+  images (O10). Include two contracts with local market index 0 and
+  eligible sets `{K_0, K_1}` and `{K_0, K_2}`: both signatures verify and
+  their key images differ. Repeat across chains and redeployments. S7
+  checks that a contract compiled for one deployment domain refuses a
+  different chain or contract instance; the wallet rejects a domain
+  mismatch before signing (4.3).
 
 ## 9. Slices
 
@@ -529,7 +581,7 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S2 | port intent-lang ef5abe8 (section 6); gate = the intent-lang S7 counters | DONE: `make -B check` EXIT 0 with the intent-lang S7 counters: 49 examples, 0 failed; 19 parse, 186 check and 22 kit-only refusals; 188 evals, 2 proves; contracts 2 written and 5 refused; rings 6 built and 2 refused; 28 guest and 14 host differential rows; 5 runs, 10 run refusals; 8 asmtool; 3 builds, 16 lower refusals, 33 build checks; 20 dispatch; 43 evm steps; 14 precompile rows and 143 steps; 13 mock rows; 15 diff rows; 24 emit regressions; the 13 "regressions: passed" lines; 0 failures. The log is byte for byte the intent-lang S7 log (section 6) |
 | S3 | `Env.block` in the guest (O5); the `market` form (O4): `Reading`, `Outcome`, labels, `rule`, `answers`, `deadline`; rows of 4.2 | s1 DONE (2026-10-24): b1 `Env.block` (O5) is the intent-lang S8 b1 port, and `make -B check` EXIT 0 with the S2 counters except 50 examples (`blocks.lang`), 6 runs (`blocks.script`), 11 run refusals (a bad BLOCK), 17 lower refusals and 34 build checks (`env-block.lang`). The log is byte for byte the intent-lang S8 b1 log. The market design is 4.6. s2 DONE (2026-10-24): the market build after the USER rulings Q-S3-1 to Q-S3-5 (a) (section 1): the `market` keyword and `M.x` names in a program, `parse_market`, `check_market` (text elaboration), `examples/market.lang` (Rain and Heat), five check rows, one parse row, six eval rows and a fronttool `REFUSE_DATA` row. `make -B check` EXIT 0 with the s1 counters except 51 examples, 20 parse, 191 check and 23 kit-only refusals, and 194 evals. DONE |
 | S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | DONE (2026-10-24): `Contest` (4.1) in the domain; `Verdict`, `left`, `right`, `swap` and `verdictAt` as program `def`s (the S4 note of 4.1); `examples/contest-ends.lang` (L3, L4), `examples/contest-neutral.lang` (L6), `test/check/contest-wrong-end.lang` (`PATH_END`), two fronttool cell rows and four eval rows (section 8). `make -B check` EXIT 0 with the S3 counters except 53 examples, 192 check refusals and 198 evals. The domain change moves no other row. DONE |
-| S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | NEXT |
+| S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | s1 DONE (2026-10-24): STEP 0 gate EXIT 0, byte for byte the S4 log; probes P1 to P3 (4.3); the tweak form of the key image replaces `Hp(K, poll)` (4.3), Q-S5-1 to Q-S5-3 OPEN; docs only. s2 (the build) NEXT after the rulings |
 | S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | |
 | S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | |
 | S8 | mutants, SPEC, VALIDATION, close | |
@@ -567,6 +619,9 @@ Each item is RULED (S1, 2026-10-24) or kept as the builder call.
 - O10 the key image for each dispute (4.3). Without it, the masked ring
   leaks the voter by intersection. Needs a hash to curve on chain. Test
   rows in section 8. RULED: Q6 (a). The hash to curve is S5 work.
+  S5 s1: the probes give the key image of a tweaked key, with no bLSAG
+  kernel change (4.3, Q-S5-1). It needs a deployment-scoped dispute id;
+  no hash to curve on chain requires the static route of Q-S5-2 (a).
 - O11 the UAT regime of a binary verdict (4.4). Kept: open until S6.
 - O12 intent-lang S9 builds the same encrypted ballots for its DAO.
   resolve-lang S6 builds them for the verdict. Later, one of the two ports
@@ -581,7 +636,7 @@ Each item is RULED (S1, 2026-10-24) or kept as the builder call.
   image), not token weight. The charter decides who is a member. Kept:
   Q6 (a) gives one ballot for each member.
 
-## 11. Questions for the USER (S1, S3)
+## 11. Questions for the USER (S1, S3, S5)
 
 Each question has a recommendation (a). All ten are RULED (S1, 2026-10-24;
 the quote is in section 1).
@@ -641,3 +696,32 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   that `refl` at the wrong end gives (probes p4, p9); the section 8 row
   changes. (b) The market check maps `PATH_END` in `answers` to
   `TYPE_MISMATCH`, as section 8 said before the ruling. RULED: (a).
+- Q-S5-1 the key image for each dispute (O10, probe P3). (a) The tweak:
+  the slot of an eligible member is `K_i + t_d G` with
+  `t_d = hash(tag, d) mod r`, and the member signs with `x_i + t_d mod r`,
+  so `I_d = (x_i + t_d) * Hp(K_i + t_d G)`. Use the deployment-scoped
+  `d` of Q-S5-2. No bLSAG kernel change; the existing DAO, blsagtool and
+  precompile rows do not move. The working anonymity assumptions are DDH
+  in G1 and random-oracle hashes, as for bLSAG. The wallet checks the
+  deployment domain and adds `t_d` to the key. (b) The original 4.3 form
+  `I = x * Hp(K, d)`: `H_p` in `front/blsag.c` reads the poll. It changes
+  `blsag.c`, `front/eval.c` and their rows, and the DAO writer (with
+  `pollId` in the state) then needs a hash to curve on chain (MODEXP 0x05),
+  or a second pair of `zkSign` and `zkVerify` ops for disputes.
+- Q-S5-2 the dispute id. (a) A deployment-scoped market id:
+  `d = hash(deploymentDomain, m)` for local market index `m`. The domain
+  binds the intended chain and contract instance and is fixed before
+  compilation; S7 enforces that target and the wallet checks it (4.3).
+  Section 7 lets a market have one proposal and at most one dispute, and
+  the markets are a closed list, so `t_d`, each slot point and each `H_p`
+  are compile-time constants on this static route. A redeployment or
+  another chain requires a different domain and a new build. Reusing only
+  the local market index repeats key images across contracts. (b) A
+  deployment-scoped dispute counter in the state, for more than one
+  dispute in a market: each slot then needs `H_p` for each new dispute,
+  on chain unless a separate precomputation design supplies it.
+- Q-S5-3 the binding of a member to an address. (a) The charter lists each
+  member as a pair of an address and a BN254 key, in the member order of
+  the ring; `Eligible M k` reads the stake of that address. (b) A member
+  entry binds an address to a key with a Schnorr proof by the key; the
+  binding is then state, and the DAO does not list addresses.
