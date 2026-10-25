@@ -26,6 +26,20 @@ def lawAddrSame : Path Flag (addrEq wOwner 0x00000000000000000000000000000000000
 def lawAddrTop : Path Flag (addrEq wOwner wTopOnly) flagNo := refl
 def lawAddrLow : Path Flag (addrEq wOwner wLowOnly) flagNo := refl
 
+-- u256Mul and u256Div are EVM MUL and DIV (S7 s2, Q-S7-7): no trap.
+def wHalf : U256 := 0x8000000000000000000000000000000000000000000000000000000000000000u
+def wMulWrap : U256 := u256Mul wHalf 2u
+def wDivZero : U256 := u256Div 7u 0u
+def lawMul : Path U256 (u256Mul 6u 7u) 42u := refl
+def lawMulCarry : Path U256 (u256Mul wCarry wCarry) wTwo128 := refl
+def lawMulWrap : Path U256 wMulWrap 0u := refl
+def lawMulMax : Path U256 (u256Mul wMax wMax) 1u := refl
+def lawDiv : Path U256 (u256Div 7u 2u) 3u := refl
+def lawDivZero : Path U256 wDivZero 0u := refl
+def lawDivHigh : Path U256 (u256Div wMax wTwo128) 0xffffffffffffffffffffffffffffffffu := refl
+def mulWraps : Nat -> Flag := fun (n : Nat) => u256Eq (u256Mul wHalf (toU256 n)) 0u
+def divGivesZero : Nat -> Flag := fun (n : Nat) => u256Eq (u256Div 7u (toU256 n)) 0u
+
 -- Entries: a trap goes up through u256Le and u256Eq.
 def addTrap : Nat -> Flag := fun (n : Nat) => u256Le (u256Add wMax (toU256 n)) wMax
 def eqTrap : Nat -> Flag := fun (n : Nat) => u256Eq (u256Add wMax (toU256 n)) wMax

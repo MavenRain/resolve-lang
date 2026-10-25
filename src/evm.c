@@ -183,6 +183,8 @@ static int emit_binary(Emit *e, const IrExpr *x) {
   switch (x->op) {
   case IR_OP_ADD: asm_op(a, EVM_OP_ADD); asm_push(a, UINT64_MAX); asm_op(a, EVM_OP_AND); return 1;
   case IR_OP_WORD_ADD: asm_op(a, EVM_OP_ADD); return 1;
+  case IR_OP_WORD_MUL: asm_op(a, EVM_OP_MUL); return 1;
+  case IR_OP_WORD_DIV: asm_op(a, EVM_OP_DIV); return 1; /* EVM DIV: x / 0 = 0 */
   case IR_OP_MUL: asm_op(a, EVM_OP_MUL); asm_push(a, UINT64_MAX); asm_op(a, EVM_OP_AND); return 1;
   case IR_OP_SUB: emit_ops(a, sub_sat, sizeof sub_sat / sizeof sub_sat[0]); return 1;
   case IR_OP_EQ: asm_op(a, EVM_OP_EQ); return 1;

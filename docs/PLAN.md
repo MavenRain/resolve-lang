@@ -626,6 +626,16 @@ each leaf `H_p` is a build constant, but the ring digest D folds the hash
 over all ring points, thus with a selected ring D is a term of the selected
 points.
 
+S7 s2 b4 (2026-10-25): `u256Mul` and `u256Div` are kit operations
+(Q-S7-7 (a)). `u256Mul` is EVM MUL (the product modulo 2^256) and
+`u256Div` is EVM DIV (x / 0 = 0). Neither op traps. The evaluator uses
+`u256_mul_wrap` and `u256_div_zero` (`src/front/u256.c`). The lowering maps
+them to `IR_OP_WORD_MUL` and `IR_OP_WORD_DIV`, which emit MUL and DIV.
+`test/check/pruned-op.lang` refuses `u256Min` now (it refused `u256Mul`).
+The product can wrap, thus `claim` must check it: the product divided by
+the stake must be the pool (Q-S7-7). Parts b2 and b3 are the next session
+(S7 s2 resume 2).
+
 ## 5. Laws
 
 | Law | Statement | How it holds |
@@ -773,6 +783,14 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 - As built (S7 s2 b1): `test/run/blocks.script` runs on the t8n route of
   `test/evm.sh` at NUMBER 42 (one evm step), and the state gets 42u.
   `test/lower/env-block.lang` is not a refusal row now: `Env.block` lowers.
+- As built (S7 s2 b4): `examples/words.lang` has 7 `refl` laws of
+  `u256Mul` and `u256Div` (6 * 7 = 42, 2^64 * 2^64 = 2^128,
+  2^255 * 2 = 0, max * max = 1, 7 / 2 = 3, 7 / 0 = 0,
+  max / 2^128 = 2^128 - 1) and 6 eval rows (`wMulWrap` and `wDivZero`
+  give `0u`; `mulWraps` at 2 and 1, `divGivesZero` at 0 and 2). An entry
+  that gives U256 is not an entry for `langc eval` (`EVAL_ARGS`), thus the
+  two entries give a Flag. `test/emittool.c` has 3 emit rows: `word-mul`,
+  `word-div` and `word-div-zero` (9 / 0 gives 0, no trap).
 
 ## 9. Slices
 
@@ -785,7 +803,7 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | DONE (2026-10-24): `Contest` (4.1) in the domain; `Verdict`, `left`, `right`, `swap` and `verdictAt` as program `def`s (the S4 note of 4.1); `examples/contest-ends.lang` (L3, L4), `examples/contest-neutral.lang` (L6), `test/check/contest-wrong-end.lang` (`PATH_END`), two fronttool cell rows and four eval rows (section 8). `make -B check` EXIT 0 with the S3 counters except 53 examples, 192 check refusals and 198 evals. The domain change moves no other row. DONE |
 | S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | s1 DONE (2026-10-24): STEP 0 gate EXIT 0, byte for byte the S4 log; probes P1 to P3 (4.3); the tweak form of the key image replaces `Hp(K, poll)` (4.3), Q-S5-1 to Q-S5-3 OPEN; docs only. s2 DONE (2026-10-24): Q-S5-1 to Q-S5-3 RULED (a); `examples/ledger.lang` (L7), `examples/ring.lang` (L8, O10), two run scripts and 11 ring eval rows (section 8). `make -B check` EXIT 0 with the S4 counters except 55 examples, 209 evals and 8 runs. No blsagtool, precompile, host or DAO writer row moves. DONE |
 | S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | s1 DONE (2026-10-25): STEP 0 gate EXIT 0, byte for byte the S5 log; probes P1 to P4 (4.4); Q-S6-1 to Q-S6-5 OPEN; docs only. s2 DONE (2026-10-25): Q-S6-1 to Q-S6-5 RULED (a) (section 11); the port of intent-lang 3df9d96 (its S9) over `Verdict`: `examples/tally.lang` (guest, L9, `verdictOf`, `Params`), `examples/ballot.lang` (kit), `test/ballottool.c`, `test/check/tally-leak.lang` (L10), 28 eval rows and 14 precompile rows (section 8). The dispute id def is `disputeId`: `dispute` is a domain constructor, so a def with that name gives `REFUSE_NAME` (rule R4). `make -B check` EXIT 0 with the S5 counters except 57 examples, 193 check refusals, 237 evals, 157 precompile steps, and 14 "regressions: passed" lines (+ `ballot regressions: passed`). O11 and O12 CLOSED. DONE |
-| S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 b1 DONE (2026-10-25): STEP 0 at the USER commit 29eaec4 (tree 80268401: the S7 s1 tree and a USER edit of the cast to four calls); the USER ruled Q-S7-1 to Q-S7-8 (a); the NUMBER port and the t8n route of intent-lang 79e1898 (4.7); gate EXIT 0 with the S7 s1 counters except 16 lower refusals, 33 lower checks and 44 evm steps. b2, b3 and b4 NEXT (s2 resume). |
+| S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 b1 DONE (2026-10-25): STEP 0 at the USER commit 29eaec4 (tree 80268401: the S7 s1 tree and a USER edit of the cast to four calls); the USER ruled Q-S7-1 to Q-S7-8 (a); the NUMBER port and the t8n route of intent-lang 79e1898 (4.7); gate EXIT 0 with the S7 s1 counters except 16 lower refusals, 33 lower checks and 44 evm steps. s2 b4 DONE (2026-10-25): STEP 0 at the USER commit 4571e84 (tree 25ab7a0d), gate byte for byte the b1 log; `u256Mul` and `u256Div` (Q-S7-7 (a), 4.7); gate EXIT 0 with the b1 counters except 243 evals and 27 emit regressions. b2 and b3 NEXT (s2 resume 2). |
 | S8 | mutants, SPEC, VALIDATION, close | |
 
 ## 10. Open items
@@ -839,7 +857,7 @@ Each item is RULED (S1, 2026-10-24) or kept as the builder call.
 - O15 `claim` needs division (stake times pool over winning pool). The kit
   U256 operations need a check in S5. Kept: Q8 (a) keeps `claim`.
   S7 s1 (4.7, P4): the kit has no `u256Mul` and no `u256Div`
-  (Q-S7-7).
+  (Q-S7-7). S7 s2 b4 adds them (Q-S7-7 (a)); `claim` is S7 s3.
 - O16 votes in few wallets: one member, one ballot (the ring and the key
   image), not token weight. The charter decides who is a member. Kept:
   Q6 (a) gives one ballot for each member.

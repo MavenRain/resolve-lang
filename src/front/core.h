@@ -62,6 +62,8 @@ typedef enum {
   OP_FLAG_IF,
   OP_U256_ADD,
   OP_U256_SUB,
+  OP_U256_MUL, /* u256Mul a b: a * b modulo 2^256 (EVM MUL, Q-S7-7) */
+  OP_U256_DIV, /* u256Div a b: the floor of a / b, 0 when b is 0 (EVM DIV) */
   OP_U256_LE,
   OP_U256_EQ,
   OP_TO_U256,

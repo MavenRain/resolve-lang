@@ -48,6 +48,8 @@ typedef enum {
   IR_OP_MIN,       /* the smaller operand */
   IR_OP_KECCAK,    /* keccak256(left . right), each a 32-byte word */
   IR_OP_WORD_ADD,  /* the sum modulo 2^256 (a List word slot, C-c9-1) */
+  IR_OP_WORD_MUL,  /* the product modulo 2^256 (u256Mul, Q-S7-7) */
+  IR_OP_WORD_DIV,  /* the floor of left / right; 0 when right is 0 (u256Div) */
   IR_OP_MOD        /* left modulo right; traps when right is 0 (sealed-lang S2) */
 } IrOp;
 

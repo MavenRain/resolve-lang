@@ -26,7 +26,7 @@ static const char *const OP_NAMES[] = {
   [OP_NAT_ADD] = "natAdd", [OP_NAT_SUB] = "natSub",
   [OP_NAT_EQ] = "natEq", [OP_NAT_LE] = "natLe",
   [OP_FLAG_IF] = "flagIf", [OP_U256_ADD] = "u256Add", [OP_U256_SUB] = "u256Sub",
-  [OP_U256_LE] = "u256Le",
+  [OP_U256_MUL] = "u256Mul", [OP_U256_DIV] = "u256Div", [OP_U256_LE] = "u256Le",
   [OP_U256_EQ] = "u256Eq", [OP_TO_U256] = "toU256",
   [OP_NAT_DIV] = "natDiv", [OP_NAT_MOD] = "natMod", [OP_HASH] = "hash", [OP_ECRECOVER] = "ecrecover",
   [OP_EC_ADD] = "ecAdd", [OP_EC_MUL] = "ecMul", [OP_EC_PAIRING] = "ecPairing", [OP_ADDR_TO_U256] = "addrToU256",
@@ -55,7 +55,7 @@ static const unsigned char OP_ARITY[] = {
   [OP_FOLD_FAMILY] = VARIES, [OP_UNFOLD] = 3, [OP_FILTER] = 2, [OP_WITNESS] = 1,
   [OP_PAYLOAD] = 1, [OP_NAT_ADD] = 2, [OP_NAT_SUB] = 2,
   [OP_NAT_EQ] = 2, [OP_NAT_LE] = 2, [OP_FLAG_IF] = 3, [OP_U256_ADD] = 2,
-  [OP_U256_SUB] = 2, [OP_U256_LE] = 2,
+  [OP_U256_SUB] = 2, [OP_U256_MUL] = 2, [OP_U256_DIV] = 2, [OP_U256_LE] = 2,
   [OP_U256_EQ] = 2, [OP_TO_U256] = 1, [OP_ADDR_EQ] = 2,
   [OP_NAT_DIV] = 2, [OP_NAT_MOD] = 2, [OP_HASH] = 2, [OP_ECRECOVER] = 4,
   [OP_EC_ADD] = 2, [OP_EC_MUL] = 2, [OP_EC_PAIRING] = 1, [OP_ADDR_TO_U256] = 1,
@@ -1330,7 +1330,8 @@ static const Value *word_value(Machine *m, const U256 *x) {
   return val_word(m, WORD_U256, w);
 }
 
-/* u256Add traps on an overflow; u256Sub stops at 0. */
+/* u256Add traps on an overflow; u256Sub stops at 0. u256Mul wraps and
+   u256Div gives 0 for a 0 divisor (EVM MUL and DIV, Q-S7-7). */
 static const Value *u256_arith(Machine *m, Op op, const Value *const *a, uint32_t n, int (*fn)(U256 *, const U256 *, const U256 *)) {
   const Value *out;
   U256 r;
@@ -2586,6 +2587,8 @@ static const Value *transp_data(Machine *m, const Value *head, const Value *line
   case OP_FLAG_IF:
   case OP_U256_ADD:
   case OP_U256_SUB:
+  case OP_U256_MUL:
+  case OP_U256_DIV:
   case OP_U256_LE:
   case OP_U256_EQ:
   case OP_TO_U256:
@@ -3575,6 +3578,10 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
     return u256_arith(m, op, a, n, u256_add);
   case OP_U256_SUB:
     return u256_arith(m, op, a, n, u256_sub);
+  case OP_U256_MUL:
+    return u256_arith(m, op, a, n, u256_mul_wrap);
+  case OP_U256_DIV:
+    return u256_arith(m, op, a, n, u256_div_zero);
   case OP_U256_LE:
   case OP_U256_EQ:
   case OP_ADDR_EQ:

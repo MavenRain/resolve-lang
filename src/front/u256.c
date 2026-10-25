@@ -118,6 +118,22 @@ int u256_div(U256 *out, const U256 *a, const U256 *b) {
   return 1;
 }
 
+/* EVM MUL: the low 256 bits of the product. u256_mul writes them before it
+   tests the high halves. */
+int u256_mul_wrap(U256 *out, const U256 *a, const U256 *b) {
+  u256_mul(out, a, b);
+  return 1;
+}
+
+/* EVM DIV: x / 0 = 0. */
+int u256_div_zero(U256 *out, const U256 *a, const U256 *b) {
+  if (u256_cmp(b, &U256_ZERO) == 0)
+    *out = U256_ZERO;
+  else
+    u256_div(out, a, b);
+  return 1;
+}
+
 int u256_min(U256 *out, const U256 *a, const U256 *b) {
   *out = u256_cmp(a, b) <= 0 ? *a : *b;
   return 1;

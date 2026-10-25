@@ -21,6 +21,8 @@ int u256_add(U256 *out, const U256 *a, const U256 *b); /* traps on an overflow *
 int u256_sub(U256 *out, const U256 *a, const U256 *b); /* stops at 0, no trap */
 int u256_mul(U256 *out, const U256 *a, const U256 *b); /* traps on an overflow */
 int u256_div(U256 *out, const U256 *a, const U256 *b); /* floors, traps on 0 */
+int u256_mul_wrap(U256 *out, const U256 *a, const U256 *b); /* modulo 2^256, no trap */
+int u256_div_zero(U256 *out, const U256 *a, const U256 *b); /* floors, 0 for 0, no trap */
 int u256_min(U256 *out, const U256 *a, const U256 *b); /* no trap */
 /* -1, 0 or 1. */
 int u256_cmp(const U256 *a, const U256 *b);

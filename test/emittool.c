@@ -131,6 +131,9 @@ int main(void) {
   ok &= binary("min-right", IR_OP_MIN, 9, 4, 4, 0);
   ok &= binary("div", IR_OP_DIV, 9, 4, 2, 0);
   ok &= binary("div-zero", IR_OP_DIV, 9, 0, 0, 1);
+  ok &= binary("word-mul", IR_OP_WORD_MUL, 6, 7, 42, 0);
+  ok &= binary("word-div", IR_OP_WORD_DIV, 9, 4, 2, 0);
+  ok &= binary("word-div-zero", IR_OP_WORD_DIV, 9, 0, 0, 0);
   ok &= binary("add64-limit", IR_OP_ADD64, UINT64_MAX, 0, UINT64_MAX, 0);
   ok &= binary("add64-overflow", IR_OP_ADD64, UINT64_MAX, 1, 0, 1);
   ok &= binary("mul64-overflow", IR_OP_MUL64, UINT64_MAX, 2, 0, 1);
