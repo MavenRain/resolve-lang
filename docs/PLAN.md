@@ -536,6 +536,79 @@ Build sites (S3 s2): lexer.h `TokKind`; lexer.c:21-72 (keywords) and
 kinds); check.c:4515-4562 (form dispatch), with `check_cofamily`
 (check.c:4250-4513) as the model.
 
+### 4.7 The contract (S7 s1 probes)
+
+S7 s1 (2026-10-25) ran the probes P1 to P5 on a scratch tree from
+`git archive HEAD` (`~/Documents/resolve-lang-work/S7-probes/run.sh` and
+`run2.sh`). No source file changes.
+
+Survey. The port has one contract writer, `src/front/writer.c` (orbit-lang
+S9 B1). It writes the plain tally DAO of `examples/dao.lang` ("contracts:
+2 written, 5 refused"). It has no market entry, no encrypted ballot and no
+opening. After its S9 (3df9d96), intent-lang has one commit, 79e1898 (its
+S10). S10 lowers `Env.block` to NUMBER, adds the `evm t8n` route for a step
+at BLOCK more than 0, and adds `examples/daokit.lang`: a kit contract
+written by hand from the host constants. `writer.c` does not change
+(intent-lang Q-S10-3 (a)). The encrypted cast is four calls through three
+entries: `castSig`, `castSlot` for slot 0, `castSlot` for slot 1, then
+`castSeal`. Both slot proofs are required before sealing. One ballot has
+43 words and a call has at most 22 (intent-lang O39). The encrypted tally
+is 8 state words. `enact` opens the slot 0 tally with the quorum {1, 2}
+and sets the window by
+`decide`. This commit is the port source of S7 (Q-S7-2).
+
+P1 (the entry names). In the kit mode, `def dispute` gives `REFUSE_NAME:
+dispute is a domain constructor (rule R4)`. `take`, `propose`, `challenge`,
+`contest`, `disputeEntry`, `ballot`, `openTally`, `finalize`, `claim`,
+`params`, `setParams` and `decide` pass `langc --kit check` (Q-S7-1). In
+the guest mode each one gives `REFUSE_KIT`, because `U256` is a kit item.
+The contract is a kit file.
+
+P2 (the masked ring). K4c lowers `zkVerify` only over a closed ring. These
+give `REFUSE_LOWER: K4c does not lower zkVerify at a word position`: a ring
+point from an argument, the ring from the state (the `ballot` entry of
+`examples/ring.lang`), and a ring element `flagIf c P Q` over two closed
+points. A `flagIf` between two closed rings lowers. The kit runtime of
+`examples/ballot.lang` is 10511 bytes. With one more view over a second
+closed ring it is 14000 bytes, thus one verifier instance is about 3.5 kB.
+The masked ring of a market has 2^n closed rings for n members (each slot
+is the tweaked key or the NUMS point), and each market has its own tweak.
+With 3 members and 2 markets this is 16 instances, about 56 kB. The EIP-170
+limit is 24576 bytes (Q-S7-3). The one-hot and sum proofs of
+`examples/ballot.lang` already lower and verify on the chain (the S6
+precompile rows).
+
+P3 (the encrypted tally and the opening). The resolve-lang `langc` refuses
+to build `examples/daokit.lang` of intent-lang. The `src/` diff of 79e1898
+(`src/ir.h`, `src/lower.c`, `src/evm.c`, `src/asm.h`) applies to HEAD with
+no fuzz. After it, `langc` builds, and daokit has a runtime of 16702 bytes,
+the size of intent-lang S10. Thus the 8 tally words and the threshold
+opening of `enact` with the quorum {1, 2} lower as they are. For a verdict,
+the opening of the `right` slot gives r, then l = casts - r, and the
+verdict is `flagIf (u256Le r l) 0u 1u` (Q-S6-3 (a)).
+
+P4 (`Params`). daokit keeps one `window` word and one `proposal` word (an
+`init` constant). `enact` sets `window` to `proposal` when yes is more than
+no. The resolve-lang `Params` has two words, `disputeWindow` and
+`voteWindow` (Q-S6-4 (a), Q-S7-5). The kit U256 operations are `u256Add`,
+`u256Sub`, `u256Eq` and `u256Le`. There is no multiplication and no
+division (O15, Q-S7-7). The kit `Env` has NOW and CALLER (and BLOCK after
+the port). It has no chain id and no contract address (Q-S7-6).
+
+P5 (the size of S7). With Q-S7-5 (a), the contract has 9 entries: `take`,
+`propose`, `challenge`, `castSig`, `castSlot`, `castSeal`, `openTally`
+(one opening for a dispute poll and for the DAO poll), `finalize` and
+`claim`, and the views. The kit inlines a `def` at each use (P2: a second
+call of `sigOk` adds its code again). Thus one entry holds the one verifier
+and one entry holds the one opening. Forecast with Q-S7-3 (a) and Q-S7-5
+(a): daokit (16702 bytes, one verifier and one opening) plus the market
+entries (the kit `take` of `examples/ledger.lang` is 292 bytes), about 19
+to 21 kB. This is a forecast, not a measurement. The size row of the
+contract decides, and a size over EIP-170 is a STOP. The compiler work
+(NUMBER, the ring lowering, the `Env` fields, the U256 operations) and the
+contract work are each about the size of intent-lang S10, thus S7 needs
+three build sessions (Q-S7-4).
+
 ## 5. Laws
 
 | Law | Statement | How it holds |
@@ -692,7 +765,7 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | DONE (2026-10-24): `Contest` (4.1) in the domain; `Verdict`, `left`, `right`, `swap` and `verdictAt` as program `def`s (the S4 note of 4.1); `examples/contest-ends.lang` (L3, L4), `examples/contest-neutral.lang` (L6), `test/check/contest-wrong-end.lang` (`PATH_END`), two fronttool cell rows and four eval rows (section 8). `make -B check` EXIT 0 with the S3 counters except 53 examples, 192 check refusals and 198 evals. The domain change moves no other row. DONE |
 | S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | s1 DONE (2026-10-24): STEP 0 gate EXIT 0, byte for byte the S4 log; probes P1 to P3 (4.3); the tweak form of the key image replaces `Hp(K, poll)` (4.3), Q-S5-1 to Q-S5-3 OPEN; docs only. s2 DONE (2026-10-24): Q-S5-1 to Q-S5-3 RULED (a); `examples/ledger.lang` (L7), `examples/ring.lang` (L8, O10), two run scripts and 11 ring eval rows (section 8). `make -B check` EXIT 0 with the S4 counters except 55 examples, 209 evals and 8 runs. No blsagtool, precompile, host or DAO writer row moves. DONE |
 | S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | s1 DONE (2026-10-25): STEP 0 gate EXIT 0, byte for byte the S5 log; probes P1 to P4 (4.4); Q-S6-1 to Q-S6-5 OPEN; docs only. s2 DONE (2026-10-25): Q-S6-1 to Q-S6-5 RULED (a) (section 11); the port of intent-lang 3df9d96 (its S9) over `Verdict`: `examples/tally.lang` (guest, L9, `verdictOf`, `Params`), `examples/ballot.lang` (kit), `test/ballottool.c`, `test/check/tally-leak.lang` (L10), 28 eval rows and 14 precompile rows (section 8). The dispute id def is `disputeId`: `dispute` is a domain constructor, so a def with that name gives `REFUSE_NAME` (rule R4). `make -B check` EXIT 0 with the S5 counters except 57 examples, 193 check refusals, 237 evals, 157 precompile steps, and 14 "regressions: passed" lines (+ `ballot regressions: passed`). O11 and O12 CLOSED. DONE |
-| S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | |
+| S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 NEXT. |
 | S8 | mutants, SPEC, VALIDATION, close | |
 
 ## 10. Open items
@@ -745,11 +818,13 @@ Each item is RULED (S1, 2026-10-24) or kept as the builder call.
   (4.4). Kept: the `ballot` entry of S7 takes the dispute id.
 - O15 `claim` needs division (stake times pool over winning pool). The kit
   U256 operations need a check in S5. Kept: Q8 (a) keeps `claim`.
+  S7 s1 (4.7, P4): the kit has no `u256Mul` and no `u256Div`
+  (Q-S7-7).
 - O16 votes in few wallets: one member, one ballot (the ring and the key
   image), not token weight. The charter decides who is a member. Kept:
   Q6 (a) gives one ballot for each member.
 
-## 11. Questions for the USER (S1, S3, S5, S6)
+## 11. Questions for the USER (S1, S3, S5, S6, S7)
 
 Each question has a recommendation (a). All ten are RULED (S1, 2026-10-24;
 the quote is in section 1).
@@ -887,3 +962,92 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   `examples/ring.lang` with the encrypted one and adds `openTally` and the
   tie run row. (b) changes `test/run/ring.script` and its `.out`.
   RULED: (a).
+- Q-S7-1 the entry name of `dispute M s` (4.7, P1). `dispute` is a domain
+  constructor, thus a `def` with this name gives `REFUSE_NAME` (rule R4).
+  (a) `challenge`. It is a short ABI name, and it does not repeat a domain
+  name. Section 7 and the event `Disputed` keep the word "dispute".
+  (b) `disputeEntry`, with the form of `disputeId` (S6).
+  RECOMMENDED: (a).
+- Q-S7-2 the port source and the form of the contract (4.7, survey).
+  (a) Port intent-lang 79e1898 (its S10): the NUMBER lowering (the `src/`
+  diff applies to HEAD with no fuzz, P3), the `evm t8n` route of
+  `test/evmchain.sh` and `test/evm.sh`, a `ballottool` mode for the
+  contract constants, and a chain test with the form of `test/dao.sh`,
+  including the four-call cast and refusal to seal with a missing slot
+  proof. The contract is a kit file written by hand from the host constants
+  (`examples/resolvekit.lang`). `src/front/writer.c` and its rows do not
+  change. (b) `writer.c` gets an encrypted mode that writes the contract
+  from the program. (b) has no source to port.
+  RECOMMENDED: (a).
+- Q-S7-3 the masked ring in the contract (4.7, P2). K4c lowers `zkVerify`
+  only over a closed ring, and one verifier is about 3.5 kB. With 2^n rings
+  for each market, the contract is over EIP-170. (a) Extend the K4c
+  lowering: a ring element can be a tree of `flagIf` over closed points.
+  Each leaf is closed, thus each `H_p` is a build constant. The verifier
+  selects the point and the `H_p` of each slot at run time, and there is
+  one verifier. New lower rows (one that lowers, one that refuses a point
+  from an argument) and precompile rows over a selected ring. (b) One
+  contract for each market and 2 members (4 rings): about 16.7 - 3.5 + 14
+  = 27 kB, also over EIP-170. (c) The contract ring has all tweaked keys
+  and no mask, and L8 comes from another route. (c) changes the design
+  (4.3).
+  RECOMMENDED: (a).
+- Q-S7-4 the split of S7 (4.7, P5). (a) Three build sessions. s2: the
+  compiler: the NUMBER port and the t8n route, the ring lowering of Q-S7-3,
+  the `Env` fields of Q-S7-6 and the U256 operations of Q-S7-7, with their
+  lower, eval, evm and precompile rows. s3: the contract
+  `examples/resolvekit.lang`, the `ballottool` mode, the chain test and the
+  size rows (over EIP-170: STOP and ask). s4: the run rows of section 8,
+  the change of `examples/ring.lang` and `test/run/ring.script`, and the
+  S7 close. (b) Two build sessions: s2 the compiler and the contract, s3
+  the run rows. (b) puts about two times the work of intent-lang S10 in
+  one session.
+  RECOMMENDED: (a).
+- Q-S7-5 the `Params` DAO entry (4.7, P4). (a) The DAO poll is poll 0 of
+  the same cast entries, and the dispute of market m is poll m + 1. The
+  tally words, `casts` and the stage of a key image are maps keyed by the
+  poll. The ring of poll 0 is the ring of the member keys tweaked by the
+  poll 0 id, with no mask (with Q-S7-3 (a) the poll selects the leaves).
+  `openTally 0` opens the DAO tally and sets `disputeWindow` and
+  `voteWindow` by `decide`: a pass takes the new `Params`, a fail or a tie
+  keeps the old. The proposed `Params` is an `init` constant, as in
+  daokit. A proposal entry is not in S7. (b) A second contract for the
+  DAO (the daokit port with two window words), and the market contract
+  reads the windows by a view call. The kit has no view call to another
+  contract. (c) The windows are build constants, and the DAO entry is S8.
+  RECOMMENDED: (a).
+- Q-S7-6 the row "a contract for one deployment domain refuses another
+  chain or contract instance" (section 8). The domain is a build constant
+  (Q-S5-2 (a)), and the kit `Env` has no chain id and no contract address
+  (4.7, P4). (a) Two new `Env` fields, lowered to CHAINID (0x46) and
+  ADDRESS (0x30). Each entry reverts when `domainOf (chain env) (self
+  env)` is not `deployment`. The run env gets the chain id and the
+  contract address from a script header line, thus the other scripts do
+  not change. Rows: a call with another chain id reverts, and a call to
+  another contract address reverts. (b) No check at run time. The row is a
+  ballot signed for another domain: the tweak is different, thus the ring
+  check fails. A copy of the bytecode on another chain or at another
+  address is not refused, and its key images repeat the key images of the
+  first contract (a limit in the docs).
+  RECOMMENDED: (a).
+- Q-S7-7 `claim` and U256 division (O15, 4.7, P4). The kit has no
+  multiplication and no division. (a) Add `u256Mul` (EVM MUL, modulo
+  2^256) and `u256Div` (EVM DIV, x / 0 = 0) as kit operations in the
+  evaluator, the checker and the lowering, with eval and evm rows.
+  `claim` pays floor(stake * pool / winPool), and it reverts when the
+  product wraps (the check: the product divided by the stake is the pool).
+  (b) `claim` pays back the stake only. (b) changes Q8 (a). (c) `claim` is
+  S8.
+  RECOMMENDED: (a).
+- Q-S7-8 the tie row, the same-outcome row and `examples/ring.lang`
+  (section 8, Q-S6-5 (a)). (a) Both rows are in the run script of the
+  contract (`test/run/resolvekit.script`, on the guest and on the EVM
+  chain): a tie of the opened tally (1 left, 1 right) keeps the first
+  proposal, and `challenge M s` with `rule M s == rule M r` reverts (L5).
+  `examples/ring.lang` drops its clear `ballot` and `count`.
+  `test/run/ring.script` keeps the `take` rows, the key image rows move to
+  the run script of the contract, and `test/run/ring.out` changes.
+  (b) `examples/ring.lang` and `test/run/ring.script` do not change. They
+  stay the S5 guest reference of L8, and only the contract script gets the
+  new rows.
+  RECOMMENDED: (a).
