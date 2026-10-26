@@ -62,8 +62,8 @@ def p2 : Prod U256 U256 := ecMul g k2
 def a0 : Addr := 0x00000000000000000000000000000000000000a0
 def a1 : Addr := 0x00000000000000000000000000000000000000a1
 
-state State := makeState (position : Map U256 U256) (used : Map U256 Flag) (tally : Map U256 U256)
-def init : State := makeState mapEmpty mapEmpty mapEmpty
+state State := makeState (position : Map U256 U256)
+def init : State := makeState mapEmpty
 -- The slot of member i in market m: the tweaked key when the stake of a_i is 0, else N_i (L8).
 -- The deadline freezes the ledger, thus after the deadline this is the ring at the deadline.
 def slot : State -> U256 -> Addr -> Prod U256 U256 -> U256 -> Prod U256 U256 :=
@@ -76,28 +76,12 @@ def take : (env : Env) -> (s : State) -> (m : U256) -> (x : U256) -> Option (Pro
   fun (env : Env) (s : State) (m : U256) (x : U256) =>
     flagIf (known m)
       (flagIf (u256Le (deadlineOf m) (block env)) none
-        (some (pair (makeState (mapSet (position s) (key m (caller env)) (u256Add (mapGet (position s) (key m (caller env))) x)) (used s) (tally s)) nil)))
+        (some (pair (makeState (mapSet (position s) (key m (caller env)) (u256Add (mapGet (position s) (key m (caller env))) x))) nil)))
       none
--- Entry: a ballot in an unknown market or before the deadline reverts. A used key image reverts.
--- A failed check over the masked ring reverts. Else the key image is recorded and the choice counted.
--- The signed poll is the dispute id.
-def ballot : (env : Env) -> (s : State) -> (m choice c1 s1 s2 ix iy : U256) -> Option (Prod State (List Out)) :=
-  fun (env : Env) (s : State) (m choice c1 s1 s2 ix iy : U256) =>
-    flagIf (known m)
-      (flagIf (u256Le (deadlineOf m) (block env))
-        (flagIf (mapGet (used s) (hash (hash ix iy) m))
-          none
-          (flagIf (zkVerify (ring s m) (disputeOf m) choice (cons c1 (cons s1 (cons s2 (cons ix (cons iy nil))))))
-            (some (pair (makeState (position s) (mapSet (used s) (hash (hash ix iy) m) flagYes)
-              (mapSet (tally s) (hash m choice) (u256Add (mapGet (tally s) (hash m choice)) 1u))) nil))
-            none))
-        none)
-      none
--- View: the count of a choice in a market.
-def count : (env : Env) -> (s : State) -> (m choice : U256) -> U256 :=
-  fun (env : Env) (s : State) (m choice : U256) => mapGet (tally s) (hash m choice)
+-- S7 s4 (Q-S7-8 (a)): the clear ballot and its count are not in this file. The ballot rows are in
+-- test/run/resolvekit.script, over the encrypted ballot of examples/ballot.lang.
 
--- The rings that the signers see at the deadline (test/run/ring.script).
+-- The rings that the signers see at the deadline. The eval row sameDisputes uses sigU01.
 -- Market 0: member 1 has a stake, thus slot 1 is N_1. Market 1: no stakes.
 -- The signing key of a member in dispute d is k + t_d mod r: the wallet adds the tweak.
 def ringM0 : List (Prod U256 U256) := cons (tweaked (disputeOf 0u) p0) (cons (nums 1u) nil)
