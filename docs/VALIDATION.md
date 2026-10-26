@@ -428,3 +428,90 @@ the gas, and there is no cap.
 | 23 | EVM_SIZE | EVM_SIZE | | | | | | |
 | 28 | EVM_SIGNATURE | EVM_SIGNATURE | | | | | | |
 | 29 | EVM_RING (`langc contract`) | | | | | | | |
+
+## The resolution contract (resolve-lang S7 and S8)
+
+`examples/resolvekit.lang` is the reference program of the resolution
+contract (SPEC.md section 13): two markets, three members, the encrypted
+dispute ballots and the DAO poll of `Params`. `test/resolvekit.sh` builds
+it with `langc --kit build`, deploys it on a geth `evm` 1.14.12 chain with
+the token mock at 0x...ee, and runs 65 chain steps. `test/gate.sh` runs it
+and checks each step and the size rows.
+
+Size rows (the `resolvekit size rows` line of the gate log):
+
+| Code | Bytes | Limit | Room |
+| --- | --- | --- | --- |
+| Runtime | 24441 | 24576 (EIP-170) | 135 |
+| Initcode | 24471 | 49152 (EIP-3860) | 24681 |
+
+Measured on 2026-10-26 at 9fec6af (the S8 s3 STEP 0 gate, the
+`resolvekit gas rows` line). For each entry the value is the execution gas
+of one call of the chain test: the trace summary `gasUsed` of a t8n step,
+else `evm run --statdump` of the same call on the same prestate. `evm run`
+does not add the intrinsic gas of a transaction. The deploy is 30000000
+less the gas left of `evm run --create --statdump`, and it includes the
+code deposit. `castSeal first` is the first seal in the test and writes new
+tally slots; `castSeal later` is a later seal. The gate does not check the
+gas, and there is no cap.
+
+| Entry | Gas |
+| --- | --- |
+| deploy | 4938167 |
+| take | 141727 |
+| propose | 73278 |
+| challenge | 77681 |
+| castSig | 293373 |
+| castSlot | 89778 |
+| castSeal first | 281432 |
+| castSeal later | 127532 |
+| openTally | 119014 |
+| finalize | 35897 |
+| claim | 68187 |
+
+A ballot is four calls: `castSig`, two `castSlot` and `castSeal`. With the
+`castSlot` value for both slots, the first ballot is about 754361 gas, and
+a later ballot is about 600461 gas.
+
+Gate counters at the close of each slice. S2 is the intent-lang S7 count
+(the port). The S3 to S7 values come from the rows of docs/PLAN.md section
+9. The S8 values are the S8 s3 STEP 0 log.
+
+| Counter | S2 | S3 | S4 | S5 | S6 | S7 | S8 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| examples | 49 | 51 | 53 | 55 | 57 | 60 | 60 |
+| parse refusals | 19 | 20 | 20 | 20 | 20 | 20 | 20 |
+| check refusals | 186 | 191 | 192 | 192 | 193 | 193 | 193 |
+| kit-only refusals | 22 | 23 | 23 | 23 | 23 | 23 | 23 |
+| evals | 188 | 194 | 198 | 209 | 237 | 291 | 291 |
+| runs | 5 | 6 | 6 | 8 | 8 | 10 | 13 |
+| run refusals | 10 | 11 | 11 | 11 | 11 | 14 | 14 |
+| lower refusals | 16 | 17 | 17 | 17 | 17 | 16 | 16 |
+| build checks | 33 | 34 | 34 | 34 | 34 | 33 | 33 |
+| evm steps | 43 | 43 | 43 | 43 | 43 | 48 | 48 |
+| precompile steps | 143 | 143 | 143 | 143 | 157 | 163 | 163 |
+| emit regressions | 24 | 24 | 24 | 24 | 24 | 27 | 27 |
+| "regressions: passed" lines | 13 | 13 | 13 | 13 | 14 | 15 | 15 |
+| resolvekit chain steps | | | | | | 62 | 65 |
+
+The S8 mutants (docs/PLAN.md 4.8 has the rows that fail for each mutant).
+One mutant changes one law row of `examples/resolvekit.lang`. Each mutant
+passes `langc --kit check`. A failed size row is not a kill.
+
+| Mutant | Law row | Result |
+| --- | --- | --- |
+| M1 | L5 the same outcome (`challenge`) | KILLED |
+| M2 | the tie fails (`openAt`) | KILLED |
+| M3 | the used key image (`castSigAt`) | KILLED |
+| M4 | field 2, the last challenge block (`challenge`) | KILLED |
+| M5 | field 6, the last voting block (`pollOpen`) | KILLED (by the chain test only) |
+| M6 | the claim once (`claim`) | KILLED |
+| M7 | L8 the masked ring (`mslot`) | KILLED |
+| M8 | the domain (`here`) | KILLED by the S8 s2 rows |
+
+With the S7 s4 rows, M1 to M7 were killed and M8 survived. S8 s2 added the
+two domain rows (`test/run/resolvekit.chain.script`,
+`test/run/resolvekit.self.script` and two chain takes) and the a1 row
+(`test/run/resolvekit.a1.script` and one chain cast). With these rows, M1
+to M8 are all killed, and the a1 row kills M7 by the law, not only by the
+fixtures.

@@ -1,7 +1,10 @@
 # resolve-lang status
 
-> Write here: one paragraph. Say which milestone the build implements, and
-> which milestone it does not complete yet.
+The build implements all the slices of docs/PLAN.md section 9 (S0 to S8):
+the port of intent-lang, the `market` form, `Contest`, the ledger and the
+masked ring, the encrypted dispute ballots, and the resolution contract on
+an EVM chain. The plan is CLOSED (S8 s3, 2026-10-26). SPEC.md gives the
+language, and docs/VALIDATION.md gives the gate results.
 
 ## Implemented
 
@@ -65,20 +68,49 @@
   deployment-scoped id `d = hash(domain, m)` (PLAN 4.3). Two run scripts
   and 11 ring eval rows test it. S7 lowers the ring and enforces the
   deployment domain.
+- S6 (the encrypted dispute ballots, PLAN 4.4; Q-S6-1 to Q-S6-5 RULED
+  (a)): the ballots of intent-lang S9 are ported for the verdict (O12). A
+  ballot is a one-hot `Enc` over `Verdict`, and the poll id is the dispute
+  id (O14). `tallyEnc` adds the ballots. L9 is a law-only def
+  (`examples/tally.lang`), and a use of `decrypt` outside a law type gives
+  `REFUSE_LAW` (L10, `test/check/tally-leak.lang`). The threshold open uses
+  the quorum {1, 2}. The challenge outcome needs a majority, and a tie
+  fails. `Params` (the dispute window and the vote window) is in the DAO.
+- S7 (the contract, PLAN 4.7; Q-S7-1 to Q-S7-10 RULED): the contract of
+  `examples/resolvekit.lang` (SPEC.md section 13) with the entries `take`,
+  `propose`, `challenge`, `castSig`, `castSlot`, `castSeal`, `openTally`,
+  `finalize` and `claim`, and the views `pollOpen`, `pollShut`, `stakeOf`,
+  `fieldOf`, `pollWord` and `windows`. The
+  contract lowers `Env.block` to NUMBER (b1), and `Env.chain` and
+  `Env.self` to CHAINID and ADDRESS (b3; a run script gives them with an
+  `env CHAIN SELF` line). `u256Mul` and `u256Div` are MUL and DIV (b4;
+  `x / 0 = 0`). `test/resolvekit.sh` runs the contract on an EVM chain
+  (62 chain steps) and prints the size rows (runtime 24441 bytes, initcode
+  24471 bytes) and the gas of each entry.
+- S8 (the mutants and the docs, PLAN 4.8; Q-S8-1 to Q-S8-7 RULED (a)): the
+  mutants M1 to M8, one for each law row of `examples/resolvekit.lang`,
+  are all KILLED. s2 added the kill rows of M8 (the domain:
+  `test/run/resolvekit.chain.script`, `test/run/resolvekit.self.script`
+  and two chain takes) and of M7 (the a1 row:
+  `test/run/resolvekit.a1.script` and one chain cast): 13 runs and 65
+  chain steps. s3 wrote SPEC.md sections 1 and 9 to 16, the resolution
+  section of docs/VALIDATION.md and this file.
 
 ## Remaining M0 work
 
-> Write here: one numbered item for each missing feature. Say what each item
-> needs first.
-
-1. <work item>.
+None: the plan of docs/PLAN.md is CLOSED (S8).
 
 ## Known limits
 
-> Write here: one item for each limit of the current build, with its cause
-> (a fuel budget, a host limit, a stack size).
-
-- <limit>.
+- O6: one dispute round. `Contest A` is a proposition (Q4 (a)), thus a
+  dispute of a verdict (an escalation) is not in v1.
+- The `Params` proposal: the proposed values are `init` constants of the
+  program, and no entry proposes other values (Q-S7-5 (a), Q-S8-7 (a)).
+- The size: the runtime of `examples/resolvekit.lang` is 24441 bytes, thus
+  135 bytes of room are left under EIP-170 (24576 bytes).
+- O13: `ecrecover` comes with the port and has no use.
+- The non-goal of PLAN 4.3: a stake through another wallet, another venue
+  or an off-chain hedge is outside the proof of L8.
 
 ## Internal boundaries
 
