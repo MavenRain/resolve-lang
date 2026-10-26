@@ -576,7 +576,10 @@ is the tweaked key or the NUMS point), and each market has its own tweak.
 With 3 members and 2 markets this is 16 instances, about 56 kB. The EIP-170
 limit is 24576 bytes (Q-S7-3). The one-hot and sum proofs of
 `examples/ballot.lang` already lower and verify on the chain (the S6
-precompile rows).
+precompile rows). S7 s2 b2 (Q-S7-3 (a)) lowers a selected ring as one
+verifier, not as 2^n closed rings. The forecast of 3.5 kB for one instance
+is not the size of this verifier: one selected verifier over a ring of 3 is
+about 5.9 kB (5857 bytes, the b2 note below).
 
 P3 (the encrypted tally and the opening). The resolve-lang `langc` refuses
 to build `examples/daokit.lang` of intent-lang. The `src/` diff of 79e1898
@@ -603,7 +606,11 @@ call of `sigOk` adds its code again). Thus one entry holds the one verifier
 and one entry holds the one opening. Forecast with Q-S7-3 (a) and Q-S7-5
 (a): daokit (16702 bytes, one verifier and one opening) plus the market
 entries (the kit `take` of `examples/ledger.lang` is 292 bytes), about 19
-to 21 kB. This is a forecast, not a measurement. The size row of the
+to 21 kB. This is a forecast, not a measurement. It counts a closed
+verifier. A selected verifier over a ring of 3 is 5857 bytes and a closed
+verifier over a ring of 3 is 3489 bytes (the b2 note below), thus the
+forecast goes up by at least 2.4 kB, to about 21.4 to 23.4 kB. The size
+row of the
 contract decides, and a size over EIP-170 is a STOP. The compiler work
 (NUMBER, the ring lowering, the `Env` fields, the U256 operations) and the
 contract work are each about the size of intent-lang S10, thus S7 needs
@@ -648,6 +655,37 @@ address. `test/run/chains.script` runs it at chain 1 and at the receiver
 address of `test/evmchain.sh`. `test/evm.sh` runs it on the chain, and
 it refuses an env line that does not give these values. Part b2 (the ring
 lowering of Q-S7-3) is the next session (S7 s2 resume 3).
+
+S7 s2 b2 (2026-10-25): `zkVerify` lowers over a selected ring (Q-S7-3
+(a)). A ring element is a closed point or a `flagIf` tree of closed points
+with a stuck condition. In `src/front/eval.c`, `zk_split` gives a `flagIf`
+tree of words for the point, and for `H_p` of each leaf (each leaf `H_p` is
+a build constant). `zk_selected_terms` takes a closed list of 1 to
+`BLSAG_RING_MAX` such elements. The digest D is the hash fold of
+`blsag_digest` over the words (2n - 1 hash nodes). `zk_unroll` takes the
+point words, the `H_p` words and D. When `zk_ring` fails with a stuck
+result, `zk_verify` tries `zk_selected_terms`, and a list of n + 3 words
+gives the unrolled verify for each poll id, choice and signature. A ring
+point from an argument stays `REFUSE_LOWER`. The rows are the 2 `selected
+ring` rows of `test/gate.sh` and `examples/zksel.lang` (section 8).
+
+The size. p2-elem (the base of 10511 bytes and one view over a selected
+ring of 3) has a runtime of 16368 bytes, thus one selected verifier over a
+ring of 3 adds 5857 bytes. One closed verifier over a ring of 3 adds 3489
+bytes (P2). For a ring of 2, `examples/zksel.lang` has 3228 runtime bytes
+and `examples/zkcast.lang` has 2086. The bound of S7 s2 resume 3 (below
+10511 + 3489 = 14000 bytes) was wrong: a selected verifier holds the full
+verifier and the words of both points, thus it cannot be smaller than a
+closed verifier. The row compares with p2-sel (17422 bytes: the same base
+with two closed verifiers). The cause: `src/lower.c` has no memo for a word
+term, thus D is lowered at each of its 2n - 1 uses (each c_i two times and
+the last `u256Eq` one time: 5 uses for n = 3), each with 2 IFs and 5
+KECCAK nodes. The point and `H_p` words add 4 IFs. A possible shrink (not
+done): a memo in `src/lower.c` for a shared `flagIf` word value (as the
+curve memo `memo_add`), or D as one `flagIf` over closed digests when one
+element is selected. The S7 s3 contract has a masked ring of 3 members
+with each slot selected: its size row decides, and a size over EIP-170 is
+a STOP.
 
 ## 5. Laws
 
@@ -804,6 +842,24 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
   that gives U256 is not an entry for `langc eval` (`EVAL_ARGS`), thus the
   two entries give a Flag. `test/emittool.c` has 3 emit rows: `word-mul`,
   `word-div` and `word-div-zero` (9 / 0 gives 0, no trap).
+- As built (S7 s2 b3): `examples/chains.lang` (kit) has 4 eval rows
+  (`chainIs` at 1 and 2, `selfIs` at the receiver address and at 193).
+  `test/run/chains.script` runs `stamp` and `onlyAt` with the env line
+  `env 1u` and the receiver address (`test/run/chains.out`).
+  `test/run.sh` has 3 `RUN_SCRIPT` rows: an env line with no address, a
+  chain id that is not a word, and an env line after a call.
+  `test/evm.sh` runs the script on the chain.
+- As built (S7 s2 b2): `test/gate.sh` has the 2 `selected ring` rows.
+  p2-elem (`examples/ballot.lang` and the view `p2View` over the ring
+  element `flagIf (u256Eq sel 0u) (pair p0x p0y) (pair p1x p1y)`) builds
+  below 17422 runtime bytes (16368 bytes). p2-arg (a ring point from an
+  argument) gives `REFUSE_LOWER`. `examples/zksel.lang` (kit) is
+  `examples/zkcast.lang` with the entry `cast` over the ring `selRing
+  sel`: (p0, p1) at sel 0u, else (p2, p1). `okA` and `okB` give 1,
+  `crossA` and `crossB` give 0, and `sigA` and `sigB` give the words.
+  `test/precompile.sh` has 6 rows over the zksel contract: each signature
+  reverts at the other sel and enters at its own sel, `count 1u` reads 2,
+  and the used key image of A reverts.
 
 ## 9. Slices
 
@@ -816,7 +872,7 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | DONE (2026-10-24): `Contest` (4.1) in the domain; `Verdict`, `left`, `right`, `swap` and `verdictAt` as program `def`s (the S4 note of 4.1); `examples/contest-ends.lang` (L3, L4), `examples/contest-neutral.lang` (L6), `test/check/contest-wrong-end.lang` (`PATH_END`), two fronttool cell rows and four eval rows (section 8). `make -B check` EXIT 0 with the S3 counters except 53 examples, 192 check refusals and 198 evals. The domain change moves no other row. DONE |
 | S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | s1 DONE (2026-10-24): STEP 0 gate EXIT 0, byte for byte the S4 log; probes P1 to P3 (4.3); the tweak form of the key image replaces `Hp(K, poll)` (4.3), Q-S5-1 to Q-S5-3 OPEN; docs only. s2 DONE (2026-10-24): Q-S5-1 to Q-S5-3 RULED (a); `examples/ledger.lang` (L7), `examples/ring.lang` (L8, O10), two run scripts and 11 ring eval rows (section 8). `make -B check` EXIT 0 with the S4 counters except 55 examples, 209 evals and 8 runs. No blsagtool, precompile, host or DAO writer row moves. DONE |
 | S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | s1 DONE (2026-10-25): STEP 0 gate EXIT 0, byte for byte the S5 log; probes P1 to P4 (4.4); Q-S6-1 to Q-S6-5 OPEN; docs only. s2 DONE (2026-10-25): Q-S6-1 to Q-S6-5 RULED (a) (section 11); the port of intent-lang 3df9d96 (its S9) over `Verdict`: `examples/tally.lang` (guest, L9, `verdictOf`, `Params`), `examples/ballot.lang` (kit), `test/ballottool.c`, `test/check/tally-leak.lang` (L10), 28 eval rows and 14 precompile rows (section 8). The dispute id def is `disputeId`: `dispute` is a domain constructor, so a def with that name gives `REFUSE_NAME` (rule R4). `make -B check` EXIT 0 with the S5 counters except 57 examples, 193 check refusals, 237 evals, 157 precompile steps, and 14 "regressions: passed" lines (+ `ballot regressions: passed`). O11 and O12 CLOSED. DONE |
-| S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 b1 DONE (2026-10-25): STEP 0 at the USER commit 29eaec4 (tree 80268401: the S7 s1 tree and a USER edit of the cast to four calls); the USER ruled Q-S7-1 to Q-S7-8 (a); the NUMBER port and the t8n route of intent-lang 79e1898 (4.7); gate EXIT 0 with the S7 s1 counters except 16 lower refusals, 33 lower checks and 44 evm steps. s2 b4 DONE (2026-10-25): STEP 0 at the USER commit 4571e84 (tree 25ab7a0d), gate byte for byte the b1 log; `u256Mul` and `u256Div` (Q-S7-7 (a), 4.7); gate EXIT 0 with the b1 counters except 243 evals and 27 emit regressions. b2 and b3 NEXT (s2 resume 2). |
+| S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 b1 DONE (2026-10-25): STEP 0 at the USER commit 29eaec4 (tree 80268401: the S7 s1 tree and a USER edit of the cast to four calls); the USER ruled Q-S7-1 to Q-S7-8 (a); the NUMBER port and the t8n route of intent-lang 79e1898 (4.7); gate EXIT 0 with the S7 s1 counters except 16 lower refusals, 33 lower checks and 44 evm steps. s2 b4 DONE (2026-10-25): STEP 0 at the USER commit 4571e84 (tree 25ab7a0d), gate byte for byte the b1 log; `u256Mul` and `u256Div` (Q-S7-7 (a), 4.7); gate EXIT 0 with the b1 counters except 243 evals and 27 emit regressions. s2 b3 DONE (2026-10-25): STEP 0 at the USER commit c418e33, gate byte for byte the b4 log; `Env.chain` and `Env.self` (Q-S7-6 (a), 4.7); gate EXIT 0 with the b4 counters except 58 examples, 247 evals, 9 runs, 14 run refusals and 48 evm steps. s2 b2 DONE (2026-10-25): STEP 0 at the USER commit 476d44a (tree aac47ee8: the b3 tree and a USER edit of `docs/host/README.md`), gate byte for byte the b3 log; the selected ring (Q-S7-3 (a), 4.7); gate EXIT 0 with the b3 counters except 59 examples, 253 evals, 163 precompile steps and the new line "selected ring: 2 rows, p2-elem runtime 16368 bytes". s2 DONE. s3 NEXT: the contract `examples/resolvekit.lang`. |
 | S8 | mutants, SPEC, VALIDATION, close | |
 
 ## 10. Open items

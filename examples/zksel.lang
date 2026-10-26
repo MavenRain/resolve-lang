@@ -1,0 +1,45 @@
+-- A private cast over a selected ring (slice S7 s2 b2, docs/PLAN.md 4.7): examples/zkcast.lang with the ring element 0
+-- selected by the first argument sel. The entry cast takes the calldata words sel, choice, c_1, s_1, s_2, I.x, I.y. At
+-- sel 0u the ring is (p0, p1), else it is (p2, p1). The ring element is a `flagIf` over two closed points, thus the
+-- evaluator gives the unrolled verify with the words of both points and a digest D over them (front/eval.c
+-- zk_selected_terms). The nullifier key is hash (hash I.x I.y) poll (ruling Q4).
+def g : Prod U256 U256 := pair 1u 2u
+def k0 : U256 := zkKey 0
+def k1 : U256 := zkKey 1
+def k2 : U256 := zkKey 2
+def p0 : Prod U256 U256 := ecMul g k0
+def p1 : Prod U256 U256 := ecMul g k1
+def p2 : Prod U256 U256 := ecMul g k2
+def poll : U256 := 0u
+
+-- The ring of the entry: sel 0u selects p0, another sel selects p2.
+def selRing : (sel : U256) -> List (Prod U256 U256) :=
+  fun (sel : U256) => cons (flagIf (u256Eq sel 0u) p0 p2) (cons p1 nil)
+
+state State := makeState (used : Map U256 Flag) (tally : Map U256 U256)
+def init : State := makeState mapEmpty mapEmpty
+
+-- Entry: a used key image reverts, a failed verify reverts, else the key image is recorded and the choice counted.
+def cast : (env : Env) -> (s : State) -> (sel choice c1 s1 s2 ix iy : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (sel choice c1 s1 s2 ix iy : U256) =>
+    flagIf (mapGet (used s) (hash (hash ix iy) poll))
+      none
+      (flagIf (zkVerify (selRing sel) poll choice (cons c1 (cons s1 (cons s2 (cons ix (cons iy nil))))))
+        (some (pair (makeState (mapSet (used s) (hash (hash ix iy) poll) flagYes)
+          (mapSet (tally s) choice (u256Add (mapGet (tally s) choice) 1u))) nil))
+        none)
+
+-- View: the count of a choice.
+def count : (env : Env) -> (s : State) -> (choice : U256) -> U256 :=
+  fun (env : Env) (s : State) (choice : U256) => mapGet (tally s) choice
+
+-- The host path: the signature of member 0 over ring A and of member 2 over ring B, both for choice 1. A signature
+-- verifies only over the ring that sel selects for it.
+def ringA : List (Prod U256 U256) := cons p0 (cons p1 nil)
+def ringB : List (Prod U256 U256) := cons p2 (cons p1 nil)
+def sigA : List U256 := zkSign ringA k0 poll 1u
+def sigB : List U256 := zkSign ringB k2 poll 1u
+def okA : Flag := zkVerify (selRing 0u) poll 1u sigA
+def okB : Flag := zkVerify (selRing 1u) poll 1u sigB
+def crossA : Flag := zkVerify (selRing 1u) poll 1u sigA
+def crossB : Flag := zkVerify (selRing 0u) poll 1u sigB

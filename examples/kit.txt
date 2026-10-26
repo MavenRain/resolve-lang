@@ -29,6 +29,7 @@ elim.lang
 bn254.lang
 zk.lang
 zkcast.lang
+zksel.lang
 enc-ideal.lang
 threshold.lang
 onehot.lang

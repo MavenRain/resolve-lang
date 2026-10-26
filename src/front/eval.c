@@ -1610,22 +1610,97 @@ static const Value *zk_node(Machine *m, Op op, const Value *a, const Value *b, c
   return reduce_op(m, op, 0, 0, args, c != NULL ? 3u : b != NULL ? 2u : 1u);
 }
 
-/* The verifier term of a stuck zkVerify with a closed ring (S8 B3a, Q-B3
-   ruling (a)): blsag_verify unrolled for n over ecAdd, ecMul, hash, u256Le,
-   u256Eq, first, second, pair and flagIf, so the lowering emits 6n precompile
-   calls. The ring points, the H_i table, D, the tag and r minus 1 are closed
-   words of the term. The chain is the challenge fold of front/blsag.c: tag,
-   D, poll id, choice, I.x, I.y, L.x, L.y, R.x, R.y. ITEMS holds c_1, s_1 to
-   s_n, I.x, I.y. */
-static const Value *zk_unroll(Machine *m, const G1 *ring, uint32_t n, const Value *poll, const Value *choice, const Value *const *items) {
+/* The terms of the closed ring RING for zk_unroll: each point in PTS, its
+   H_p point in HS and the digest *D are closed words. 0 when a hash to
+   point fails. */
+static int zk_closed_terms(Machine *m, const G1 *ring, uint32_t n, const Value **pts, const Value **hs, const Value **d) {
   U256 w;
-  U256 v;
   G1 h;
   uint32_t counter = 0;
   uint32_t i;
+  for (i = 0; i < n; i++) {
+    if (!blsag_hash_point(&h, &counter, &ring[i]))
+      return 0;
+    pts[i] = zk_point_value(m, &ring[i]);
+    hs[i] = zk_point_value(m, &h);
+  }
+  blsag_digest(&w, ring, n);
+  *d = word_value(m, &w);
+  return 1;
+}
+
+/* Splits the ring element V into the words *X and *Y of the point, or of
+   H_p of the point when HASH is 1. A closed point gives closed words. A
+   stuck flagIf of two such elements (a selected ring, Q-S7-3 (a)) gives a
+   flagIf of the words on the same condition, thus the lowering sees each
+   flagIf at a word position. H_p starts at counter 0 for each point, thus
+   the H_p words of each leaf are build constants. 0 when V is another
+   value, or a leaf is not a G1 or has no hash point. */
+static int zk_split(Machine *m, const Value *v, int hash, const Value **x, const Value **y) {
+  const Value *ax;
+  const Value *ay;
+  const Value *bx;
+  const Value *by;
+  const Value *hp;
+  G1 p;
+  G1 h;
+  uint32_t counter = 0;
+  if (v->kind == VAL_STUCK && v->op == OP_FLAG_IF && v->argc == 3u) {
+    if (!zk_split(m, v->args[1], hash, &ax, &ay) || !zk_split(m, v->args[2], hash, &bx, &by))
+      return 0;
+    *x = zk_node(m, OP_FLAG_IF, v->args[0], ax, bx);
+    *y = zk_node(m, OP_FLAG_IF, v->args[0], ay, by);
+    return 1;
+  }
+  if (!closed_point(v) || !g1_from_words(&p, v->args[0]->word, v->args[1]->word))
+    return 0;
+  if (hash && !blsag_hash_point(&h, &counter, &p))
+    return 0;
+  hp = hash ? zk_point_value(m, &h) : v;
+  *x = hp->args[0];
+  *y = hp->args[1];
+  return 1;
+}
+
+/* The terms of the selected ring A for zk_unroll (Q-S7-3 (a)): a closed
+   list of 1 to BLSAG_RING_MAX elements, each a closed point or a stuck
+   flagIf tree of them (zk_split). *D is the digest fold of blsag_digest
+   over the words of the points, thus a term of 2n - 1 hash nodes. *COUNT
+   gets the length. 0 when A is not such a list. */
+static int zk_selected_terms(Machine *m, const Value *a, uint32_t *count, const Value **pts, const Value **hs, const Value **d) {
+  const Value *x;
+  const Value *y;
+  const Value *hx;
+  const Value *hy;
+  uint32_t k = 0;
+  while (val_is(a, OP_CONS)) {
+    if (k == BLSAG_RING_MAX || !zk_split(m, a->args[0], 0, &x, &y) || !zk_split(m, a->args[0], 1, &hx, &hy))
+      return 0;
+    pts[k] = make(m, VAL_OP, OP_PAIR, 0, 2, x, y, NULL);
+    hs[k] = make(m, VAL_OP, OP_PAIR, 0, 2, hx, hy, NULL);
+    *d = k == 0 ? zk_node(m, OP_HASH, x, y, NULL) : zk_node(m, OP_HASH, zk_node(m, OP_HASH, *d, x, NULL), y, NULL);
+    k++;
+    a = a->args[1];
+  }
+  *count = k;
+  return k > 0 && val_is(a, OP_NIL);
+}
+
+/* The verifier term of a stuck zkVerify (S8 B3a, Q-B3 ruling (a)):
+   blsag_verify unrolled for n over ecAdd, ecMul, hash, u256Le, u256Eq,
+   first, second, pair and flagIf, so the lowering emits 6n precompile
+   calls. PTS holds the ring points, HS the H_i table and D the ring digest:
+   closed words for a closed ring (zk_closed_terms), flagIf words and a hash
+   term for a selected ring (zk_selected_terms). The tag and r minus 1 are
+   closed words. The chain is the challenge fold of front/blsag.c: tag, D,
+   poll id, choice, I.x, I.y, L.x, L.y, R.x, R.y. ITEMS holds c_1, s_1 to
+   s_n, I.x, I.y. */
+static const Value *zk_unroll(Machine *m, const Value *const *pts, const Value *const *hs, const Value *d, uint32_t n, const Value *poll, const Value *choice, const Value *const *items) {
+  U256 w;
+  U256 v;
+  uint32_t i;
   const Value *g;
   const Value *tag;
-  const Value *d;
   const Value *zero;
   const Value *rmax;
   const Value *img;
@@ -1635,8 +1710,6 @@ static const Value *zk_unroll(Machine *m, const G1 *ring, uint32_t n, const Valu
   u256_from_u64(&v, 2u);
   g = make(m, VAL_OP, OP_PAIR, 0, 2, word_value(m, &w), word_value(m, &v), NULL);
   tag = word_value(m, &BLSAG_TAG);
-  blsag_digest(&w, ring, n);
-  d = word_value(m, &w);
   u256_from_u64(&w, 0u);
   zero = word_value(m, &w);
   for (i = 0; i < 4u; i++)
@@ -1650,10 +1723,8 @@ static const Value *zk_unroll(Machine *m, const G1 *ring, uint32_t n, const Valu
     const Value *s = items[1u + i];
     const Value *l;
     const Value *r;
-    if (!blsag_hash_point(&h, &counter, &ring[i]))
-      return overflow(m);
-    l = zk_node(m, OP_EC_ADD, zk_node(m, OP_EC_MUL, g, s, NULL), zk_node(m, OP_EC_MUL, zk_point_value(m, &ring[i]), c, NULL), NULL);
-    r = zk_node(m, OP_EC_ADD, zk_node(m, OP_EC_MUL, zk_point_value(m, &h), s, NULL), zk_node(m, OP_EC_MUL, img, c, NULL), NULL);
+    l = zk_node(m, OP_EC_ADD, zk_node(m, OP_EC_MUL, g, s, NULL), zk_node(m, OP_EC_MUL, pts[i], c, NULL), NULL);
+    r = zk_node(m, OP_EC_ADD, zk_node(m, OP_EC_MUL, hs[i], s, NULL), zk_node(m, OP_EC_MUL, img, c, NULL), NULL);
     c = zk_node(m, OP_HASH, tag, d, NULL);
     c = zk_node(m, OP_HASH, c, poll, NULL);
     c = zk_node(m, OP_HASH, c, choice, NULL);
@@ -1674,11 +1745,15 @@ static const Value *zk_unroll(Machine *m, const G1 *ring, uint32_t n, const Valu
 /* zkVerify ring pollId choice sig: flagYes when the chain closes, each s_i
    is below r and I is not (0, 0). A list of another length than n + 3 is
    flagNo. An open poll id, choice or signature word with a closed ring of
-   the right length gives the unrolled verifier term (zk_unroll); any other
-   open call stays stuck. */
+   the right length gives the unrolled verifier term (zk_unroll). A
+   selected ring (zk_selected_terms) of the right length gives it too, for
+   any poll id, choice and signature. Any other open call stays stuck. */
 static const Value *zk_verify(Machine *m, const Value *const *a, uint32_t n) {
   const Value *out = trap_arg(a, n);
   const Value *items[BLSAG_RING_MAX + 4u];
+  const Value *pts[BLSAG_RING_MAX];
+  const Value *hs[BLSAG_RING_MAX];
+  const Value *d = NULL;
   G1 ring[BLSAG_RING_MAX];
   U256 sig[BLSAG_RING_MAX + 3u];
   uint32_t count = 0;
@@ -1695,12 +1770,15 @@ static const Value *zk_verify(Machine *m, const Value *const *a, uint32_t n) {
     if (items[i]->kind != VAL_WORD)
       open = 1;
   }
-  if (!zk_ring(m, OP_ZK_VERIFY, a, n, ring, &count, &out))
+  if (!zk_ring(m, OP_ZK_VERIFY, a, n, ring, &count, &out)) {
+    if (out != NULL && out->kind == VAL_STUCK && zk_selected_terms(m, a[0], &count, pts, hs, &d) && len == count + 3u)
+      return zk_unroll(m, pts, hs, d, count, a[1], a[2], items);
     return open ? opaque(m, OP_ZK_VERIFY, a, n) : out;
+  }
   if (len != count + 3u)
     return open ? opaque(m, OP_ZK_VERIFY, a, n) : flag(m, 0);
   if (open)
-    return zk_unroll(m, ring, count, a[1], a[2], items);
+    return zk_closed_terms(m, ring, count, pts, hs, &d) ? zk_unroll(m, pts, hs, d, count, a[1], a[2], items) : overflow(m);
   for (i = 0; i < len; i++)
     sig[i] = *items[i]->word;
   switch (blsag_verify(ring, count, a[1]->word, a[2]->word, sig)) {

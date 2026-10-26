@@ -195,6 +195,35 @@ contract_refused 2 USAGE - --kit contract examples/dao.lang
 echo "contracts: $written written, $refused refused, $cfail failed"
 fail=$((fail + cfail))
 
+# The selected ring (S7 s2 b2, Q-S7-3 (a)): a ring element `flagIf c P Q`
+# over two closed points lowers to one verifier that selects the words of
+# the point and of H_p at run time. p2-elem is examples/ballot.lang with one
+# more view over a selected ring. Its runtime must be below 17422 bytes, the
+# S7 s1 runtime of the same base with two closed-ring verifiers (p2-sel). A
+# ring point from an argument (p2-arg) stays REFUSE_LOWER.
+sfail=0
+sel_view() {
+  cp examples/ballot.lang "$tmp/p2-$1.lang"
+  printf '\ndef p2View : (env : Env) -> (s : State) -> (%s u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 ix iy : U256) -> Flag :=\n  fun (env : Env) (s : State) (%s u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 ix iy : U256) =>\n    zkVerify (cons %s (cons (pair p1x p1y) (cons (pair p2x p2y) nil))) disputeId (digestOf u1x u1y u2x u2y v1x v1y v2x v2y) (cons c1 (cons s1 (cons s2 (cons s3 (cons ix (cons iy nil))))))\n' "$2" "$2" "$3" >>"$tmp/p2-$1.lang"
+}
+sel_view elem sel '(flagIf (u256Eq sel 0u) (pair p0x p0y) (pair p1x p1y))'
+sel_view arg 'ax ay' '(pair ax ay)'
+status=0
+build/langc --kit build "$tmp/p2-elem.lang" --runtime >"$tmp/runtime" 2>"$tmp/err" || status=$?
+runtime=$(($(tr -d '\n' <"$tmp/runtime" | wc -c) / 2))
+if [ "$status" -ne 0 ] || [ "$runtime" -eq 0 ] || [ "$runtime" -ge 17422 ]; then
+  echo "FAIL selected ring: want a build below 17422 runtime bytes, got exit $status and $runtime bytes: $(head -n 1 "$tmp/err")"
+  sfail=$((sfail + 1))
+fi
+status=0
+build/langc --kit build "$tmp/p2-arg.lang" --runtime >"$tmp/out" 2>"$tmp/err" || status=$?
+case "$status:$(head -n 1 "$tmp/err"):$(wc -c <"$tmp/out" | tr -d ' ')" in
+  "1:langc: REFUSE_LOWER: p2View: K4c does not lower zkVerify at a word position:0") ;;
+  *) echo "FAIL selected ring arg: want REFUSE_LOWER, got exit $status: $(head -n 1 "$tmp/err")"; sfail=$((sfail + 1)) ;;
+esac
+echo "selected ring: 2 rows, p2-elem runtime $runtime bytes"
+fail=$((fail + sfail))
+
 # The ring sizes (S9 B3): the written contract of test/contract/ringN.lang must
 # build with at most 49152 initcode bytes (EIP-3860) and at most 24576 runtime
 # bytes (EIP-170). Ring 22 is the largest ring that builds: the runtime of ring

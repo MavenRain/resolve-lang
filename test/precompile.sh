@@ -338,6 +338,33 @@ else
   call revert cast 1u "$c1" "$s1" "$s2" "$ix" "$iy"
 fi
 
+# The private cast of examples/zksel.lang (S7 s2 b2): the first argument sel
+# selects ring element 0, thus the ring is (p0, p1) at sel 0u and (p2, p1) at
+# sel 1u, at poll 0. The words A are the zkcast words above (`zksel sigA` of
+# test/eval/expect.txt, member 0 over (p0, p1)). The words B are `zksel sigB`
+# (member 2 over (p2, p1)). Both are for choice 1. Each signature enters only at
+# the sel of its ring, and a used key image reverts.
+prog=examples/zksel.lang
+b1=18378777097721804545827648190024473973245883280630685881464974683515137495981u
+b2=10311407951551484410553055345951414254060350714906874258009752520648351507903u
+b3=9660660946426415475252185306110190857957752498164818308000009179865869923920u
+b4=12143800741274053729678695342025405071161578280145823471976847353119162962133u
+b5=5478805016161928785310155891281398518466491099139863695584469452713860577342u
+if ! deploy "$prog"; then
+  echo "FAIL zksel deploy: $(head -n 1 "$tmp/dump")"
+  fail=$((fail + 1))
+else
+  # The words A at sel 1u: the ring (p2, p1) does not hold member 0.
+  call revert cast 1u 1u "$c1" "$s1" "$s2" "$ix" "$iy"
+  # The words B at sel 0u: the ring (p0, p1) does not hold member 2.
+  call revert cast 0u 1u "$b1" "$b2" "$b3" "$b4" "$b5"
+  call ok cast 0u 1u "$c1" "$s1" "$s2" "$ix" "$iy"
+  call ok cast 1u 1u "$b1" "$b2" "$b3" "$b4" "$b5"
+  call "out 2" count 1u
+  # The key image of A is used.
+  call revert cast 0u 1u "$c1" "$s1" "$s2" "$ix" "$iy"
+fi
+
 # The written DAO contract (S9 B1): the text of `langc contract examples/dao.lang`.
 # The cast words come from `langc prove test/contract/ballots.lang NAME POLL`
 # (choice, c_1, s_1, s_2, I.x, I.y): the prove ring depends only on the Member
