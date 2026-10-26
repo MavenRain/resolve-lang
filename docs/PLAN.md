@@ -786,6 +786,22 @@ therefore reopen a closed challenge or voting window, accept a challenge
 after finalization, or postpone a tally opening. The 11 additional eval
 rows cover both deadlines, finalization, and future use of updated windows.
 
+S7 s3b part 2 (2026-10-25): `build/ballottool contract` prints the cast
+and opening words of the contract, one `NAME 0x<word>` per line. It uses
+the ids of the contract: deployment = hash(1, receiver), poll 0 =
+hash(daoTag 3, deployment), poll 1 = hash(deployment, 0), and the tweak
+t = hash(tweakTag 1, id) mod r of each poll. Poll 0 (prefix `q0`) has the
+ring p_v + t0 G and the casts of voters 0, 1 and 2 (slots 1, 1, 0). Its
+T1 opens to 2 of 3 casts (a pass). Member 1 has a stake in market 0, thus
+poll 1 (prefix `q1`) has the ring p0 + t1 G, `nums 1`, p2 + t1 G and the
+casts of voters 0 and 2 (slots 1, 0). Its T1 opens to 1 of 2 casts (a
+tie). The opening `q1w1` has the cast of voter 0 only (1 of 1, a pass).
+The no-arg run also prints "contract regressions: passed": each cast
+verifies in its poll and not in the other poll, and each T1 opens to its
+count. The 14 eval rows at the end of the contract file check the printed
+words with the contract helpers. The runtime stays 24441 bytes, because
+the eval definitions are not entries.
+
 ## 5. Laws
 
 | Law | Statement | How it holds |
@@ -974,6 +990,16 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
   (stakes 3 and 1 split a pool of 8 as 6 and 2), and repeated claims.
   The contract builds with 24441 runtime bytes and 24471 initcode bytes.
   The size rows are s3c.
+- As built (S7 s3b part 2): `test/ballottool.c` has the mode `contract`
+  (4.7) and the no-arg line "contract regressions: passed". The contract
+  file has 14 more eval rows over the printed words: `castAt0` and
+  `castAt1` (the ring signature of voter 0 in its poll), `cast0At1`,
+  `cast1At0` and `cast1Unstaked` (a cast at the other poll, and a cast of
+  poll 1 on the ring with no stake, give 0), `slotsAt0`, `sumAt0`,
+  `slotsAt1` and `sumAt1` (the slot and sum proofs under `ctxOf`),
+  `slotAtOther` (a slot proof under the ctx of the other poll gives 0),
+  `openAt0`, `openAt1` and `openWin1` (the T1 openings), and `openAt0Off`
+  (a wrong count gives 0).
 
 ## 9. Slices
 
@@ -986,7 +1012,7 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | DONE (2026-10-24): `Contest` (4.1) in the domain; `Verdict`, `left`, `right`, `swap` and `verdictAt` as program `def`s (the S4 note of 4.1); `examples/contest-ends.lang` (L3, L4), `examples/contest-neutral.lang` (L6), `test/check/contest-wrong-end.lang` (`PATH_END`), two fronttool cell rows and four eval rows (section 8). `make -B check` EXIT 0 with the S3 counters except 53 examples, 192 check refusals and 198 evals. The domain change moves no other row. DONE |
 | S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | s1 DONE (2026-10-24): STEP 0 gate EXIT 0, byte for byte the S4 log; probes P1 to P3 (4.3); the tweak form of the key image replaces `Hp(K, poll)` (4.3), Q-S5-1 to Q-S5-3 OPEN; docs only. s2 DONE (2026-10-24): Q-S5-1 to Q-S5-3 RULED (a); `examples/ledger.lang` (L7), `examples/ring.lang` (L8, O10), two run scripts and 11 ring eval rows (section 8). `make -B check` EXIT 0 with the S4 counters except 55 examples, 209 evals and 8 runs. No blsagtool, precompile, host or DAO writer row moves. DONE |
 | S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | s1 DONE (2026-10-25): STEP 0 gate EXIT 0, byte for byte the S5 log; probes P1 to P4 (4.4); Q-S6-1 to Q-S6-5 OPEN; docs only. s2 DONE (2026-10-25): Q-S6-1 to Q-S6-5 RULED (a) (section 11); the port of intent-lang 3df9d96 (its S9) over `Verdict`: `examples/tally.lang` (guest, L9, `verdictOf`, `Params`), `examples/ballot.lang` (kit), `test/ballottool.c`, `test/check/tally-leak.lang` (L10), 28 eval rows and 14 precompile rows (section 8). The dispute id def is `disputeId`: `dispute` is a domain constructor, so a def with that name gives `REFUSE_NAME` (rule R4). `make -B check` EXIT 0 with the S5 counters except 57 examples, 193 check refusals, 237 evals, 157 precompile steps, and 14 "regressions: passed" lines (+ `ballot regressions: passed`). O11 and O12 CLOSED. DONE |
-| S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 b1 DONE (2026-10-25): STEP 0 at the USER commit 29eaec4 (tree 80268401: the S7 s1 tree and a USER edit of the cast to four calls); the USER ruled Q-S7-1 to Q-S7-8 (a); the NUMBER port and the t8n route of intent-lang 79e1898 (4.7); gate EXIT 0 with the S7 s1 counters except 16 lower refusals, 33 lower checks and 44 evm steps. s2 b4 DONE (2026-10-25): STEP 0 at the USER commit 4571e84 (tree 25ab7a0d), gate byte for byte the b1 log; `u256Mul` and `u256Div` (Q-S7-7 (a), 4.7); gate EXIT 0 with the b1 counters except 243 evals and 27 emit regressions. s2 b3 DONE (2026-10-25): STEP 0 at the USER commit c418e33, gate byte for byte the b4 log; `Env.chain` and `Env.self` (Q-S7-6 (a), 4.7); gate EXIT 0 with the b4 counters except 58 examples, 247 evals, 9 runs, 14 run refusals and 48 evm steps. s2 b2 DONE (2026-10-25): STEP 0 at the USER commit 476d44a (tree aac47ee8: the b3 tree and a USER edit of `docs/host/README.md`), gate byte for byte the b3 log; the selected ring (Q-S7-3 (a), 4.7); gate EXIT 0 with the b3 counters except 59 examples, 253 evals, 163 precompile steps and the new line "selected ring: 2 rows, p2-elem runtime 16368 bytes". s2 DONE. s3a DONE (2026-10-25): STEP 0 at the USER commit e52bce8 (tree 011db849), gate byte for byte the s2 log; the size probe (4.7): the ring of Q-S7-5 (a) made the contract about 32 kB, over EIP-170; the USER ruled Q-S7-9 (a), the `flagIf` word memo of `src/lower.c`; gate EXIT 0 with the s2 counters except the line "selected ring: 2 rows, p2-elem runtime 15478 bytes" (was 16368). s3b part 1 DONE (2026-10-25): STEP 0 at the USER commit 77cd038 (tree 98737acb); the contract `examples/resolvekit.lang` (probe G, 24511 runtime bytes, 4.7); Q-S7-10 RULED; gate EXIT 0 with the s3a counters except 60 examples and 266 evals. s3b part 2 NEXT: the ballottool mode for the contract words. |
+| S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 b1 DONE (2026-10-25): STEP 0 at the USER commit 29eaec4 (tree 80268401: the S7 s1 tree and a USER edit of the cast to four calls); the USER ruled Q-S7-1 to Q-S7-8 (a); the NUMBER port and the t8n route of intent-lang 79e1898 (4.7); gate EXIT 0 with the S7 s1 counters except 16 lower refusals, 33 lower checks and 44 evm steps. s2 b4 DONE (2026-10-25): STEP 0 at the USER commit 4571e84 (tree 25ab7a0d), gate byte for byte the b1 log; `u256Mul` and `u256Div` (Q-S7-7 (a), 4.7); gate EXIT 0 with the b1 counters except 243 evals and 27 emit regressions. s2 b3 DONE (2026-10-25): STEP 0 at the USER commit c418e33, gate byte for byte the b4 log; `Env.chain` and `Env.self` (Q-S7-6 (a), 4.7); gate EXIT 0 with the b4 counters except 58 examples, 247 evals, 9 runs, 14 run refusals and 48 evm steps. s2 b2 DONE (2026-10-25): STEP 0 at the USER commit 476d44a (tree aac47ee8: the b3 tree and a USER edit of `docs/host/README.md`), gate byte for byte the b3 log; the selected ring (Q-S7-3 (a), 4.7); gate EXIT 0 with the b3 counters except 59 examples, 253 evals, 163 precompile steps and the new line "selected ring: 2 rows, p2-elem runtime 16368 bytes". s2 DONE. s3a DONE (2026-10-25): STEP 0 at the USER commit e52bce8 (tree 011db849), gate byte for byte the s2 log; the size probe (4.7): the ring of Q-S7-5 (a) made the contract about 32 kB, over EIP-170; the USER ruled Q-S7-9 (a), the `flagIf` word memo of `src/lower.c`; gate EXIT 0 with the s2 counters except the line "selected ring: 2 rows, p2-elem runtime 15478 bytes" (was 16368). s3b part 1 DONE (2026-10-25): STEP 0 at the USER commit 77cd038 (tree 98737acb); the contract `examples/resolvekit.lang` (probe G, 24511 runtime bytes, 4.7); Q-S7-10 RULED; gate EXIT 0 with the s3a counters except 60 examples and 266 evals. USER commit 510c137 (the deadline snapshot fix: 24441 runtime bytes, 277 evals, 10 runs). s3b part 2 DONE (2026-10-25): `build/ballottool contract` (the words of polls 0 and 1, 4.7); 14 eval rows; gate EXIT 0 with the counters of 510c137 except 291 evals and "contract regressions: passed". s3c NEXT: the chain test and the size rows. |
 | S8 | mutants, SPEC, VALIDATION, close | |
 
 ## 10. Open items

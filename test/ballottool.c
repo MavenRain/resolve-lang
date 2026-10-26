@@ -9,7 +9,9 @@
    hash(hash(hash(ballotTag, I.x), I.y), d) for the key image I of the voter,
    and the ring signs the digest of the slot ciphertexts. With the argument
    `words` it prints the chain constants of examples/ballot.lang, one
-   `name 0x<word>` per line (p0 .. p2 are the keys before the tweak). */
+   `name 0x<word>` per line (p0 .. p2 are the keys before the tweak). With
+   the argument `contract` it prints the cast and opening words of the two
+   polls of examples/resolvekit.lang in the same form (see `contract`). */
 #include <stdio.h>
 #include <string.h>
 
@@ -30,6 +32,8 @@
 /* The known answer of ballotCtx for voter 0: a recomputation would follow a
    change of the tag, this word does not. */
 #define CTX0 "0xb3b52a1ea6c078d39ccc8e706097e86410f81a8e05a7de9579f8b4b3c4d04a65"
+/* The receiver address of examples/resolvekit.lang, "receiver" as a word. */
+#define RECEIVER 0x7265636569766572ull
 
 /* One cast: the bLSAG words c_1, s_1 .. s_3, I.x, I.y over the digest, the
    ctx of I, the slots and the sum proof. */
@@ -204,6 +208,206 @@ static void open_words(const char *prefix, const ThrShare *shares, const ElgCiph
   point(prefix, "kx", "ky", &q1);
 }
 
+/* The polls of examples/resolvekit.lang: deployment = hash(chainId 1,
+   receiver), poll 0 = hash(daoTag 3, deployment) and poll 1 (the dispute
+   of market 0) = hash(deployment, 0). */
+static void poll_ids(U256 *poll0, U256 *poll1) {
+  U256 w;
+  U256 a;
+  U256 d;
+  u256_from_u64(&w, 1u);
+  u256_from_u64(&a, RECEIVER);
+  thr_hash(&d, &w, &a);
+  u256_from_u64(&w, 3u);
+  thr_hash(poll0, &w, &d);
+  u256_from_u64(&a, 0u);
+  thr_hash(poll1, &d, &a);
+}
+
+/* tweakOf: t = hash(tweakTag 1, ID) mod r. */
+static void tweak_of(U256 *t, const U256 *id) {
+  U256 w;
+  u256_from_u64(&w, 1u);
+  thr_hash(t, &w, id);
+  mod_r(t);
+}
+
+/* nums I: H_p((hash(numsTag 2, I) mod r) G), a slot with no known key. 1,
+   or 0 when the hash to point refuses. */
+static int nums(G1 *out, uint32_t i) {
+  U256 w;
+  U256 a;
+  U256 h;
+  G1 p;
+  uint32_t counter = 0;
+  u256_from_u64(&w, 2u);
+  u256_from_u64(&a, i);
+  thr_hash(&h, &w, &a);
+  mod_r(&h);
+  elg_public(&p, &h);
+  return blsag_hash_point(out, &counter, &p);
+}
+
+/* One poll of the contract: the ring, then the casts of the voters. */
+typedef struct {
+  U256 id;
+  U256 tweak;
+  G1 ring[N];
+  uint32_t count;
+  uint32_t voter[N];
+  Ballot b[N];
+} Poll;
+
+/* The poll ID with the ring K_v + t G, t = tweakOf(ID), but the slot nums
+   STAKED for the member STAKED (N for none), and the casts of the other
+   members for the slots CHOICE. 1, or 0 when a step refuses. */
+static int poll_of(Poll *p, const G1 *base, const G1 *pk, const U256 *id, uint32_t staked, const uint32_t *choice) {
+  G1 tg;
+  uint32_t v;
+  p->id = *id;
+  tweak_of(&p->tweak, id);
+  elg_public(&tg, &p->tweak);
+  for (v = 0; v < N; v++)
+    g1_add(&p->ring[v], &base[v], &tg);
+  if (staked < N && !nums(&p->ring[staked], staked))
+    return 0;
+  p->count = 0;
+  for (v = 0; v < N; v++)
+    if (v != staked) {
+      p->voter[p->count] = v;
+      if (!cast(&p->b[p->count], p->ring, pk, &p->id, &p->tweak, v, choice[v]))
+        return 0;
+      p->count++;
+    }
+  return 1;
+}
+
+/* T1, the slot 1 sum of the first COUNT casts of P. */
+static void t1_of(ElgCipher *out, const Poll *p, uint32_t count) {
+  uint32_t i;
+  *out = p->b[0].cts[1];
+  for (i = 1; i < count; i++)
+    elg_add(out, out, &p->b[i].cts[1]);
+}
+
+/* 1 when the quorum {1, 2} opens T1 of the first COUNT casts of P to WANT. */
+static int t1_count(const Poll *p, const ThrShare *shares, uint32_t count, uint64_t want) {
+  ThrPart parts[2];
+  G1 keys[N];
+  ElgCipher t;
+  uint64_t m = 0;
+  uint32_t v;
+  for (v = 0; v < N; v++)
+    keys[v] = shares[v].key;
+  t1_of(&t, p, count);
+  quorum(parts, shares, &t);
+  return thr_open(&m, parts, 2u, keys, T, N, &t, BITS) == THR_FOUND && m == want;
+}
+
+/* The words of ballot B with the prefix P: ix, iy, c1, s1 .. s3 (castSig),
+   the slots j0 and j1 (castSlot), then the sum proof (castSeal). */
+static void ballot_words(const char *p, const Ballot *b) {
+  char s[16];
+  word(p, "ix", &b->sig[N + 1u]);
+  word(p, "iy", &b->sig[N + 2u]);
+  word(p, "c1", &b->sig[0]);
+  word(p, "s1", &b->sig[1]);
+  word(p, "s2", &b->sig[2]);
+  word(p, "s3", &b->sig[3]);
+  snprintf(s, sizeof s, "%sj0", p);
+  slot_words(s, &b->cts[0], &b->slots[0]);
+  snprintf(s, sizeof s, "%sj1", p);
+  slot_words(s, &b->cts[1], &b->slots[1]);
+  snprintf(s, sizeof s, "%ssum", p);
+  point(s, "ax", "ay", &b->sum.a);
+  point(s, "bx", "by", &b->sum.b);
+  word(s, "z", &b->sum.z);
+}
+
+/* The opening words of T1 of the first COUNT casts of P (openTally), with
+   the prefix PREFIX and the count WANT as the word n. */
+static void t1_words(const char *prefix, const Poll *p, const ThrShare *shares, uint32_t count, uint64_t want, const U256 *l1, const U256 *l2) {
+  ElgCipher t;
+  U256 n;
+  t1_of(&t, p, count);
+  open_words(prefix, shares, &t, l1, l2);
+  u256_from_u64(&n, want);
+  word(prefix, "n", &n);
+}
+
+/* The words of poll P with the prefix Q: the id, the ring slots r0 .. r2,
+   then the ballots b<voter>. */
+static void poll_words(const char *q, const Poll *p) {
+  char s[16];
+  char x[8];
+  char y[8];
+  uint32_t v;
+  word(q, "id", &p->id);
+  for (v = 0; v < N; v++) {
+    snprintf(x, sizeof x, "r%ux", v);
+    snprintf(y, sizeof y, "r%uy", v);
+    point(q, x, y, &p->ring[v]);
+  }
+  for (v = 0; v < p->count; v++) {
+    snprintf(s, sizeof s, "%sb%u", q, p->voter[v]);
+    ballot_words(s, &p->b[v]);
+  }
+}
+
+/* `ballottool contract`: poll 0 (prefix q0) has the ring K_v + t0 G and the
+   casts of voters 0, 1 and 2 (slots 1, 1, 0): q0t1 opens T1 to 2 of 3 (a
+   pass). Member 1 has a stake in market 0, thus poll 1 (prefix q1) has the
+   ring K_0 + t1 G, nums 1, K_2 + t1 G and the casts of voters 0 and 2
+   (slots 1, 0): q1t1 opens T1 to 1 of 2 (a tie), and q1w1 opens T1 of the
+   cast of voter 0 only to 1 of 1 (a pass). The regressions come first: each
+   cast verifies in its poll and not in the other poll, and each T1 opens to
+   its count. PRINT 1 prints the words. 1, or 0 when a step fails. */
+static int contract(const G1 *pk, const G1 *base, const ThrShare *shares, int print) {
+  static const uint32_t choice0[N] = {1u, 1u, 0u};
+  static const uint32_t choice1[N] = {1u, 0u, 0u};
+  static Poll p[2];
+  ThrPart parts[2];
+  ElgCipher t;
+  U256 id0;
+  U256 id1;
+  U256 l1;
+  U256 l2;
+  uint32_t q;
+  uint32_t v;
+  int ok = 1;
+  poll_ids(&id0, &id1);
+  if (!poll_of(&p[0], base, pk, &id0, N, choice0) || !poll_of(&p[1], base, pk, &id1, 1u, choice1))
+    return fail("contract casts");
+  for (q = 0; q < 2u; q++)
+    for (v = 0; v < p[q].count; v++)
+      ok &= blsag_verify(p[q].ring, N, &p[q].id, &p[q].b[v].digest, p[q].b[v].sig) == BLSAG_ACCEPT || fail("contract cast");
+  ok &= (blsag_verify(p[1].ring, N, &p[1].id, &p[0].b[0].digest, p[0].b[0].sig) == BLSAG_REJECT
+         && blsag_verify(p[0].ring, N, &p[0].id, &p[1].b[0].digest, p[1].b[0].sig) == BLSAG_REJECT)
+        || fail("contract cast at the other poll");
+  ok &= (t1_count(&p[0], shares, 3u, 2u) && t1_count(&p[1], shares, 2u, 1u) && t1_count(&p[1], shares, 1u, 1u))
+        || fail("contract tally");
+  if (!ok || !print)
+    return ok;
+  t1_of(&t, &p[0], 3u);
+  quorum(parts, shares, &t);
+  thr_lagrange(&l1, parts, 2u, 0u);
+  thr_lagrange(&l2, parts, 2u, 1u);
+  point("", "pkx", "pky", pk);
+  point("", "p0x", "p0y", &base[0]);
+  point("", "p1x", "p1y", &base[1]);
+  point("", "p2x", "p2y", &base[2]);
+  point("", "k1x", "k1y", &shares[0].key);
+  point("", "k2x", "k2y", &shares[1].key);
+  word("", "l1", &l1);
+  word("", "l2", &l2);
+  poll_words("q0", &p[0]);
+  t1_words("q0t1", &p[0], shares, 3u, 2u, &l1, &l2);
+  poll_words("q1", &p[1]);
+  t1_words("q1t1", &p[1], shares, 2u, 1u, &l1, &l2);
+  t1_words("q1w1", &p[1], shares, 1u, 1u, &l1, &l2);
+  return 1;
+}
+
 static void words(const G1 *pk, const G1 *base, const ThrShare *shares, const Ballot *b) {
   ElgCipher left;
   ElgCipher right;
@@ -294,6 +498,8 @@ int main(int argc, char **argv) {
     words(&pk, base, shares, b);
     return 0;
   }
+  if (argc == 2 && strcmp(argv[1], "contract") == 0)
+    return !contract(&pk, base, shares, 1);
   /* The ctx binding: voter 0's ctx is the pinned word and the ballot
      verifies under it. */
   hex(text, sizeof text, &b[0].ctx);
@@ -321,5 +527,8 @@ int main(int argc, char **argv) {
   if (!ok)
     return 1;
   puts("ballot regressions: passed");
+  if (!contract(&pk, base, shares, 0))
+    return 1;
+  puts("contract regressions: passed");
   return 0;
 }
