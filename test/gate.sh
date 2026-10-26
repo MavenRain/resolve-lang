@@ -317,6 +317,13 @@ while read -r line <&3; do
 done 3<test/contract/diff.txt
 echo "differential: $diffs guest evals checked"
 
+# The chain test of examples/resolvekit.lang (S7 s3c): the size rows, the
+# casts and openings of polls 0 and 1, the dispute of market 0, finalize and
+# claim on evm (test/resolvekit.sh).
+status=0
+sh test/resolvekit.sh || status=$?
+[ "$status" -eq 0 ] || { echo "FAIL resolvekit chain: exit $status"; fail=$((fail + 1)); }
+
 status=0
 build/langc 2>/dev/null || status=$?
 [ "$status" -eq 2 ] || { echo "FAIL usage: want exit 2, got $status"; fail=$((fail + 1)); }
