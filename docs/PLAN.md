@@ -835,6 +835,85 @@ at `openTally 20 q1t1` (field 8 is 0). `examples/ring.lang` has no clear
 `ballot` and `count`, and its `State` has only `position`.
 `test/run/ring.script` has the two `take` rows.
 
+### 4.8 The S8 plan (S8 s1)
+
+S8 s1 (2026-10-26): STEP 0 at the USER commit a75a059 (parent 149e8a3).
+Its tree is 259e873c, the S7 s4 tree. The USER wrote a different message,
+and the commit has no Signed-off-by line. The gate
+(`~/Documents/resolve-lang-S8-step0-gate.log`) is EXIT 0, byte for byte
+the S7 s4 log (120 lines). Docs only.
+
+The S8 hits of section 11 are options that the USER did not take:
+Q-S7-5 (c) (the DAO entry), Q-S7-7 (c) (`claim`) and poll 0 of Q-S7-10.
+S7 built all three. The one S8 item from them is the `Params` proposal
+entry: Q-S7-5 (a) keeps the proposed `Params` as an `init` constant
+(Q-S8-7). The items of section 10 are RULED or kept. O6 (one round) and
+O13 (ecrecover) go to the limits in STATUS and SPEC.
+
+**Mutants.** One mutant for each law row of `examples/resolvekit.lang`.
+A mutant of a `.lang` file needs no rebuild: `langc` reads the file at
+each run. The gate rows are `test/run.sh` (the guest run of
+`test/run/resolvekit.script` against `test/run/resolvekit.out`) and
+`test/resolvekit.sh` (the EVM chain test). "Run row n" is the row with
+the number n in the script. The rows below are predictions from the
+source; s2 runs each mutant and records the rows that fail.
+
+| Mutant | Law row | Site | Change | Rows that must fail |
+|---|---|---|---|---|
+| M1 | L5 the same outcome | `challenge`, line 218 | `u256Eq (ruleOf m t) (field s m 1u)` to `flagNo` | run rows 14 and 39 (revert to ok); chain `call revert challenge 13 0u 50u` |
+| M2 | the tie (Q-S7-8 (a)) | `openAt`, line 289 | `u256Le n (u256Sub casts n)` to `u256Le (u256Add n 1u) (u256Sub casts n)` (a tie passes) | run row 31 (`pollWord 1u 9u`: 1 to 2), rows 33 and 34; chain `openTally 20 q1t1` (field 8) |
+| M3 | the used key image | `castSigAt`, line 224 | `mapGet (used s) n` to `flagNo` | run row 24 (revert to ok); chain `call revert castSig 0 $(sig 0 0)` |
+| M4 | field 2 (the last challenge block) | `challenge`, line 218 | `u256Le (block env) (field s m 2u)` to `u256Le (block env) (u256Add (field s m 2u) 1u)` | run row 42 (BLOCK 26 is field 2 + 1: revert to ok) |
+| M5 | field 6 (the last voting block) | `pollOpen`, line 180 | `(field s (u256Sub q 1u) 6u)` to `(u256Add (field s (u256Sub q 1u) 6u) 1u)` | chain `call revert castSig 20 $(sig 1 0)` (BLOCK 20 is field 6 + 1); no run row casts after field 6 |
+| M6 | the claim once | `claim`, line 321 | `withBook s (mapSet (book s) ... 0u)` to `s` | run rows 35 and 44 (the second claim: revert to ok); the chain second claim |
+| M7 | L8 the masked ring | `mslot`, line 154 | `(nums i)` to `(tweaked (disputeOf m) p)` (no mask) | run rows 16 to 23 (ok to revert); the chain casts of poll 1 |
+| M8 | the domain (O10, Q-S7-6 (a)) | `here`, line 160 | `u256Eq (domainOf (chain env) (self env)) deployment` to `u256Eq deployment deployment` | none (Q-S8-2) |
+
+Notes on the table:
+
+- M7: the fixtures kill M7, because `build/ballottool contract` signs
+  over the masked ring of poll 1. No row casts as the staked member a1
+  (Q-S8-3).
+- M8: no gate row calls a contract entry with another chain id or
+  another address. `test/run/chains.script` rows 2 and 3 check the `Env`
+  fields on `onlyAt`, not on the contract. Thus M8 survives (Q-S8-2).
+- A mutant changes the bytecode. A size row of `test/resolvekit.sh` that
+  fails is not a kill: s2 reads the names of the rows that fail.
+- The runner: save the unmutated input and first check that both runners
+  pass. For each mutant, restrict the edit to the named definition,
+  require exactly one replacement, and inspect the diff before running.
+  In particular, M3's text also occurs in `sealN`, line 269: that guard
+  must stay unchanged.
+- For guest row evidence, also run `build/langc --kit run
+  examples/resolvekit.lang test/run/resolvekit.script`, keeping its full
+  stdout and stderr in files. Compare stdout with `test/run/resolvekit.out`
+  using `diff -u`, and record the numbered calls whose results change.
+  `test/run.sh` reports only the script that mismatches and removes its
+  temporary output, so its FAIL lines cannot identify the run rows.
+  A difference only in the final `state` line is not a law-row kill.
+- Run `test/run.sh` and `test/resolvekit.sh` in the background, retain
+  both full logs and exit statuses, and wait for both before restoring
+  the saved input. Record the failing chain calls as well as the guest
+  row differences. Verify `git diff --quiet -- examples/resolvekit.lang`
+  after restoration. A mutant of `src/*.c` (Q-S8-4) needs `make -B`
+  before its run and after restoration (make 3.81 compares mtimes to the
+  second).
+
+**SPEC.md.** SPEC.md is the intent-lang text with the four name edits of
+section 6. It has no word of the market, the dispute or the contract. The
+SPEC items of this plan are the non-goal of 4.3 (a stake through another
+wallet, venue or hedge is outside the proof) and the reference to SPEC
+"choice (ii)" in 4.6 (the text elaboration). Q-S8-5 gives the form.
+
+**docs/VALIDATION.md and docs/STATUS.md.** VALIDATION.md is the
+intent-lang text. Its last section is the ring gas table that
+`test/gate.sh` (line 232) cites, and it stays. It has no section for the
+resolution contract (Q-S8-6). STATUS.md stops at S5: S8 adds the S6 items
+(the encrypted dispute ballots, L9, L10, `Params`) and the S7 items (the
+contract writer, NUMBER, CHAINID and ADDRESS, `u256Mul` and `u256Div`, the
+contract, the chain test, the size rows), and the limits (O6, O13, the
+`Params` init constant, 135 bytes of room under EIP-170).
+
 ## 5. Laws
 
 | Law | Statement | How it holds |
@@ -1069,7 +1148,7 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | s1 DONE (2026-10-24): STEP 0 gate EXIT 0, byte for byte the S4 log; probes P1 to P3 (4.3); the tweak form of the key image replaces `Hp(K, poll)` (4.3), Q-S5-1 to Q-S5-3 OPEN; docs only. s2 DONE (2026-10-24): Q-S5-1 to Q-S5-3 RULED (a); `examples/ledger.lang` (L7), `examples/ring.lang` (L8, O10), two run scripts and 11 ring eval rows (section 8). `make -B check` EXIT 0 with the S4 counters except 55 examples, 209 evals and 8 runs. No blsagtool, precompile, host or DAO writer row moves. DONE |
 | S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | s1 DONE (2026-10-25): STEP 0 gate EXIT 0, byte for byte the S5 log; probes P1 to P4 (4.4); Q-S6-1 to Q-S6-5 OPEN; docs only. s2 DONE (2026-10-25): Q-S6-1 to Q-S6-5 RULED (a) (section 11); the port of intent-lang 3df9d96 (its S9) over `Verdict`: `examples/tally.lang` (guest, L9, `verdictOf`, `Params`), `examples/ballot.lang` (kit), `test/ballottool.c`, `test/check/tally-leak.lang` (L10), 28 eval rows and 14 precompile rows (section 8). The dispute id def is `disputeId`: `dispute` is a domain constructor, so a def with that name gives `REFUSE_NAME` (rule R4). `make -B check` EXIT 0 with the S5 counters except 57 examples, 193 check refusals, 237 evals, 157 precompile steps, and 14 "regressions: passed" lines (+ `ballot regressions: passed`). O11 and O12 CLOSED. DONE |
 | S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 b1 DONE (2026-10-25): STEP 0 at the USER commit 29eaec4 (tree 80268401: the S7 s1 tree and a USER edit of the cast to four calls); the USER ruled Q-S7-1 to Q-S7-8 (a); the NUMBER port and the t8n route of intent-lang 79e1898 (4.7); gate EXIT 0 with the S7 s1 counters except 16 lower refusals, 33 lower checks and 44 evm steps. s2 b4 DONE (2026-10-25): STEP 0 at the USER commit 4571e84 (tree 25ab7a0d), gate byte for byte the b1 log; `u256Mul` and `u256Div` (Q-S7-7 (a), 4.7); gate EXIT 0 with the b1 counters except 243 evals and 27 emit regressions. s2 b3 DONE (2026-10-25): STEP 0 at the USER commit c418e33, gate byte for byte the b4 log; `Env.chain` and `Env.self` (Q-S7-6 (a), 4.7); gate EXIT 0 with the b4 counters except 58 examples, 247 evals, 9 runs, 14 run refusals and 48 evm steps. s2 b2 DONE (2026-10-25): STEP 0 at the USER commit 476d44a (tree aac47ee8: the b3 tree and a USER edit of `docs/host/README.md`), gate byte for byte the b3 log; the selected ring (Q-S7-3 (a), 4.7); gate EXIT 0 with the b3 counters except 59 examples, 253 evals, 163 precompile steps and the new line "selected ring: 2 rows, p2-elem runtime 16368 bytes". s2 DONE. s3a DONE (2026-10-25): STEP 0 at the USER commit e52bce8 (tree 011db849), gate byte for byte the s2 log; the size probe (4.7): the ring of Q-S7-5 (a) made the contract about 32 kB, over EIP-170; the USER ruled Q-S7-9 (a), the `flagIf` word memo of `src/lower.c`; gate EXIT 0 with the s2 counters except the line "selected ring: 2 rows, p2-elem runtime 15478 bytes" (was 16368). s3b part 1 DONE (2026-10-25): STEP 0 at the USER commit 77cd038 (tree 98737acb); the contract `examples/resolvekit.lang` (probe G, 24511 runtime bytes, 4.7); Q-S7-10 RULED; gate EXIT 0 with the s3a counters except 60 examples and 266 evals. USER commit 510c137 (the deadline snapshot fix: 24441 runtime bytes, 277 evals, 10 runs). s3b part 2 DONE (2026-10-25): `build/ballottool contract` (the words of polls 0 and 1, 4.7); 14 eval rows; gate EXIT 0 with the counters of 510c137 except 291 evals and "contract regressions: passed". s3c DONE (2026-10-25): STEP 0 at the USER commit 8b89bdd (tree c459a05e); `test/resolvekit.sh` (62 chain steps, the size rows: runtime 24441, initcode 24471, 4.7); gate EXIT 0 with the counters of 8b89bdd plus the 3 resolvekit lines. s4 DONE (2026-10-26): STEP 0 at the USER commit 149e8a3 (tree e4775581); `test/run/resolvekit.script` (49 rows: the tie, the L5 and the key image rows, the new layout of 4.7); `examples/ring.lang` without its clear `ballot` and `count`, `test/run/ring.script` with the two `take` rows (Q-S7-8 (a)); gate EXIT 0, byte for byte the log of 149e8a3. S7 DONE. |
-| S8 | mutants, SPEC, VALIDATION, close | |
+| S8 | mutants, SPEC, VALIDATION, close | s1 DONE (2026-10-26): STEP 0 at the USER commit a75a059 (tree 259e873c, the S7 s4 tree; the USER message, no Signed-off-by); gate EXIT 0, byte for byte the S7 s4 log; the mutant table M1 to M8 and the plan of SPEC, VALIDATION and STATUS (4.8); Q-S8-1 to Q-S8-7 RULED (a) (section 11); docs only. |
 
 ## 10. Open items
 
@@ -1127,7 +1206,7 @@ Each item is RULED (S1, 2026-10-24) or kept as the builder call.
   image), not token weight. The charter decides who is a member. Kept:
   Q6 (a) gives one ballot for each member.
 
-## 11. Questions for the USER (S1, S3, S5, S6, S7)
+## 11. Questions for the USER (S1, S3, S5, S6, S7, S8)
 
 Each question has a recommendation (a). All ten are RULED (S1, 2026-10-24;
 the quote is in section 1).
@@ -1377,3 +1456,57 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   that the kit inlines at more than one use.
   RULED: measure first, then probe B with the `keep` idiom (the USER,
   2026-10-25).
+
+S8 s1 (2026-10-26) asks Q-S8-1 to Q-S8-7 (4.8). Each has a recommendation
+(a). All seven are RULED (a) (the USER, 2026-10-26: "Take recommendations
+for all").
+
+- Q-S8-1 the split of S8 (4.8). (a) Two build sessions. s2: the mutant
+  runs M1 to M8, the rows of Q-S8-2 and Q-S8-3, the runner in
+  ~/Documents/resolve-lang-work, the results in 4.8 and section 8. s3:
+  SPEC.md, docs/VALIDATION.md, docs/STATUS.md, README.md, the S8 row and
+  the close gate. (b) Three build sessions: s2 the mutants, s3 the docs,
+  s4 the close. (c) One build session for all of S8.
+  RULED: (a).
+- Q-S8-2 M8 survives (4.8): no gate row calls the contract from another
+  domain. (a) Two revert rows on each side: a `take` with chain id 2, and
+  a `take` at another contract address. The guest rows go in the run
+  script (a second `env` line, or a second script: s2 checks what the run
+  reader accepts). The chain rows go in `test/resolvekit.sh` (another
+  chain id in the t8n env, and a copy of the runtime at another address).
+  (b) The guest rows only. (c) No rows: STATUS records M8 as a survivor,
+  and the `Env` rows of `test/run/chains.script` are the evidence.
+  RULED: (a).
+- Q-S8-3 the M7 kill (4.8). (a) A `ballottool` mode that signs as a1
+  over the ring of poll 1 with no mask (slot 1 is the tweaked key of a1),
+  and one revert row in the run script and one in the chain test. The
+  contract ring has `nums 1` in slot 1, thus the ring check fails. With
+  M7 the row is ok, thus the row kills M7 by the law and not by the
+  fixtures. (b) The fixture kill is sufficient, and STATUS records it.
+  RULED: (a).
+- Q-S8-4 mutants of `src/*.c`. (a) None: the law rows are in the
+  contract text, and the S7 lower, evm and precompile rows cover the
+  lowering. (b) Two more: the CHAINID and ADDRESS opcodes, and the
+  `u256Div` lowering (x / 0 = 0). Each needs `make -B`.
+  RULED: (a).
+- Q-S8-5 SPEC.md (4.8). (a) New sections for resolve-lang: the `market`
+  form and its elaboration (4.6, "choice (ii)"); `Contest`, `Verdict` and
+  the laws L1 to L11 (section 5); the contract entries and their state
+  fields (section 7, 4.7); the `Env` fields `block`, `chain` and `self`,
+  and `u256Mul` and `u256Div`; the non-goal of 4.3; the limits (O6, the
+  `Params` init constant). Sections 1, 9 and 10 change to the resolve-lang
+  purpose, open items and milestones. The intent-lang sections stay as the
+  base language. (b) One short section with pointers to PLAN sections 4
+  to 7.
+  RULED: (a).
+- Q-S8-6 docs/VALIDATION.md (4.8). (a) A new section for the resolution
+  contract: the size rows (24441 runtime bytes, 24471 initcode bytes), the
+  gas of each entry from the chain test (the `gasUsed` of each t8n step,
+  printed by `test/resolvekit.sh`), the gate counters of S3 to S7 and the
+  S8 mutant table. (b) Sizes, counters and mutants, no gas.
+  RULED: (a).
+- Q-S8-7 the `Params` proposal entry (Q-S7-5 (a): "A proposal entry is
+  not in S7"). The contract has 135 bytes of room under EIP-170. (a) Not
+  in v1: SPEC and STATUS record the `init` constant as a limit. (b) Build
+  it in S8; if the contract goes over EIP-170, STOP and ask.
+  RULED: (a).
