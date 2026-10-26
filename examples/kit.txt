@@ -41,3 +41,4 @@ contest-neutral.lang
 ledger.lang
 ring.lang
 ballot.lang
+resolvekit.lang

@@ -722,6 +722,70 @@ bytes (was 3228). `examples/zkcast.lang` (2086) and `examples/ballot.lang`
 (10511) do not change. The probe uses the poll 0 id `hash deployment
 255u`. The contract (s3b) sets this id.
 
+S7 s3b part 1 (2026-10-25): the contract `examples/resolvekit.lang` (a kit
+file in `examples/kit.txt`). It has the 9 entries of P5 and 4 views:
+`take`, `propose`, `challenge` (Q-S7-1 (a)), `castSig`, `castSlot`,
+`castSeal`, `openTally`, `finalize` and `claim`, and the views `stakeOf`,
+`fieldOf`, `pollWord` and `windows`. Each entry reverts when `domainOf
+(chain env) (self env)` is not `deployment` (Q-S7-6 (a)). The deployment
+is `domainOf 1u` and the receiver address of `test/evmchain.sh`. The
+markets are 0 and 1, and `ruleOf` copies the rules of `examples/ledger.lang`
+as words. The members are the host points p0, p1 and p2 of `build/ballottool
+words`. These points are `zkKey i G` (the keys of `examples/ring.lang`
+before the tweak), and the eval row `membersAreKeys` checks this. Poll 0 is
+the DAO poll with the id `daoPoll = hash daoTag deployment`. The dispute of
+market m is poll m + 1 with the id `hash deployment m`. The domain is in a
+different position in the two forms, thus the poll 0 id is not a dispute
+id. The tags are `tweakTag` 1u, `numsTag` 2u and `daoTag` 3u.
+
+The size. The first draft had 29266 runtime bytes, more than EIP-170
+(24576). The USER ruled "measure first", then "B + more keep" (Q-S7-10).
+The probes are scratch files in `~/Documents/resolve-lang-work/S7-s3/`:
+
+| Probe | Runtime bytes | Change |
+|---|---|---|
+| draft | 29266 | the first draft |
+| trimA | 27815 | one `ecAdd` value for each tally point (`setAt`, the curve memo); the rule, the outcome and the pass test bound one time |
+| B | 24553 | trimA and the `keep` idiom |
+| C | 23348 | B without poll 0 |
+| D | 22106 | B with one market |
+| E | 21104 | C and D |
+| F | 24706 | B and more `keep` sites in `claim` and `take` (larger) |
+| G | 24511 | B without the test `u256Le q 2u` in `castSig` and `openTally` |
+
+The contract starts from probe G. After the deadline snapshot fix below,
+it has 24441 runtime bytes and 24471 initcode bytes, 135 bytes below
+EIP-170. The entries of probe B: `castSig` 9156, `castSlot`
+3670, `castSeal` 3905, `openTally` 3597, `claim` 745, `take` 814,
+`challenge` 713, `finalize` 710, `propose` 573, the views 260 and the base
+458.
+
+The `keep` idiom. `keep env x = flagIf (u256Le 0u (block env)) x 0u` is an
+IF whose test holds at each entry. The `flagIf` memo of Q-S7-9 (a) uses the
+`Value` pointer as its key, thus the entry computes x one time, and each
+other use reads the local. A word is one `Value` only when the entry binds
+it one time through a helper parameter. Thus `castSigAt`, `slotN`,
+`slotAt`, `sealN`, `sealAt` and `openAt` take the kept nullifier N or the
+kept points as their first parameters, and they are not entries. A `keep`
+costs one IF (about 25 bytes). It pays only for a word with 3 or more uses
+or with a costly key (probe F).
+
+The test `u256Le q 2u`. `pollOpen` and `pollShut` give `flagNo` for q of 3
+or more: field 4 of market q - 1 is 1 only after `challenge`, `challenge`
+needs a proposal, and `propose` needs `known m`. Thus probe G keeps the
+semantics of probe B. The ballottool mode for the contract words is s3b
+part 2, and the chain test and the size rows are s3c. If s3c must make the
+contract larger than 24576 bytes, Q-S7-10 opens again.
+
+Review fix (2026-10-25): proposals store their last challenge block in
+field 2, and challenges store their last voting block in field 6. Each
+deadline uses the DAO window at creation. Later DAO updates apply to new
+proposals and challenges. Previously these fields held creation blocks,
+and each deadline check added the current window. A pass of poll 0 could
+therefore reopen a closed challenge or voting window, accept a challenge
+after finalization, or postpone a tally opening. The 11 additional eval
+rows cover both deadlines, finalization, and future use of updated windows.
+
 ## 5. Laws
 
 | Law | Statement | How it holds |
@@ -900,6 +964,16 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
   16368). The row compares it with p2-sel (17422 bytes). Without the
   memo the line prints 16368 again, thus the line detects a removal of
   the memo.
+- As built (S7 s3b part 1): `examples/resolvekit.lang` (kit) has 24 eval
+  rows: `ruleIs` (the two rules at their bounds, 4 rows), `pollSame` (the
+  poll 0 id and the two dispute ids are different, 4 rows), `knownIs` at 1
+  and 2, `deadlineIs` of markets 0 and 1, and `membersAreKeys` (p0, p1 and
+  p2 are `zkKey i G`), plus the 11 deadline snapshot regressions above.
+  `test/run/resolvekit.script` covers the stake freeze, duplicate proposals,
+  same-outcome challenges, finalization boundaries, proportional payouts
+  (stakes 3 and 1 split a pool of 8 as 6 and 2), and repeated claims.
+  The contract builds with 24441 runtime bytes and 24471 initcode bytes.
+  The size rows are s3c.
 
 ## 9. Slices
 
@@ -912,7 +986,7 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S4 | `Contest` in `domain/domain.lang`; `Verdict`, `verdictAt`, `swap`; L3, L4, L6; the cell rows | DONE (2026-10-24): `Contest` (4.1) in the domain; `Verdict`, `left`, `right`, `swap` and `verdictAt` as program `def`s (the S4 note of 4.1); `examples/contest-ends.lang` (L3, L4), `examples/contest-neutral.lang` (L6), `test/check/contest-wrong-end.lang` (`PATH_END`), two fronttool cell rows and four eval rows (section 8). `make -B check` EXIT 0 with the S3 counters except 53 examples, 192 check refusals and 198 evals. The domain change moves no other row. DONE |
 | S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | s1 DONE (2026-10-24): STEP 0 gate EXIT 0, byte for byte the S4 log; probes P1 to P3 (4.3); the tweak form of the key image replaces `Hp(K, poll)` (4.3), Q-S5-1 to Q-S5-3 OPEN; docs only. s2 DONE (2026-10-24): Q-S5-1 to Q-S5-3 RULED (a); `examples/ledger.lang` (L7), `examples/ring.lang` (L8, O10), two run scripts and 11 ring eval rows (section 8). `make -B check` EXIT 0 with the S4 counters except 55 examples, 209 evals and 8 runs. No blsagtool, precompile, host or DAO writer row moves. DONE |
 | S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | s1 DONE (2026-10-25): STEP 0 gate EXIT 0, byte for byte the S5 log; probes P1 to P4 (4.4); Q-S6-1 to Q-S6-5 OPEN; docs only. s2 DONE (2026-10-25): Q-S6-1 to Q-S6-5 RULED (a) (section 11); the port of intent-lang 3df9d96 (its S9) over `Verdict`: `examples/tally.lang` (guest, L9, `verdictOf`, `Params`), `examples/ballot.lang` (kit), `test/ballottool.c`, `test/check/tally-leak.lang` (L10), 28 eval rows and 14 precompile rows (section 8). The dispute id def is `disputeId`: `dispute` is a domain constructor, so a def with that name gives `REFUSE_NAME` (rule R4). `make -B check` EXIT 0 with the S5 counters except 57 examples, 193 check refusals, 237 evals, 157 precompile steps, and 14 "regressions: passed" lines (+ `ballot regressions: passed`). O11 and O12 CLOSED. DONE |
-| S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 b1 DONE (2026-10-25): STEP 0 at the USER commit 29eaec4 (tree 80268401: the S7 s1 tree and a USER edit of the cast to four calls); the USER ruled Q-S7-1 to Q-S7-8 (a); the NUMBER port and the t8n route of intent-lang 79e1898 (4.7); gate EXIT 0 with the S7 s1 counters except 16 lower refusals, 33 lower checks and 44 evm steps. s2 b4 DONE (2026-10-25): STEP 0 at the USER commit 4571e84 (tree 25ab7a0d), gate byte for byte the b1 log; `u256Mul` and `u256Div` (Q-S7-7 (a), 4.7); gate EXIT 0 with the b1 counters except 243 evals and 27 emit regressions. s2 b3 DONE (2026-10-25): STEP 0 at the USER commit c418e33, gate byte for byte the b4 log; `Env.chain` and `Env.self` (Q-S7-6 (a), 4.7); gate EXIT 0 with the b4 counters except 58 examples, 247 evals, 9 runs, 14 run refusals and 48 evm steps. s2 b2 DONE (2026-10-25): STEP 0 at the USER commit 476d44a (tree aac47ee8: the b3 tree and a USER edit of `docs/host/README.md`), gate byte for byte the b3 log; the selected ring (Q-S7-3 (a), 4.7); gate EXIT 0 with the b3 counters except 59 examples, 253 evals, 163 precompile steps and the new line "selected ring: 2 rows, p2-elem runtime 16368 bytes". s2 DONE. s3a DONE (2026-10-25): STEP 0 at the USER commit e52bce8 (tree 011db849), gate byte for byte the s2 log; the size probe (4.7): the ring of Q-S7-5 (a) made the contract about 32 kB, over EIP-170; the USER ruled Q-S7-9 (a), the `flagIf` word memo of `src/lower.c`; gate EXIT 0 with the s2 counters except the line "selected ring: 2 rows, p2-elem runtime 15478 bytes" (was 16368). s3b NEXT: the contract `examples/resolvekit.lang`. |
+| S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 b1 DONE (2026-10-25): STEP 0 at the USER commit 29eaec4 (tree 80268401: the S7 s1 tree and a USER edit of the cast to four calls); the USER ruled Q-S7-1 to Q-S7-8 (a); the NUMBER port and the t8n route of intent-lang 79e1898 (4.7); gate EXIT 0 with the S7 s1 counters except 16 lower refusals, 33 lower checks and 44 evm steps. s2 b4 DONE (2026-10-25): STEP 0 at the USER commit 4571e84 (tree 25ab7a0d), gate byte for byte the b1 log; `u256Mul` and `u256Div` (Q-S7-7 (a), 4.7); gate EXIT 0 with the b1 counters except 243 evals and 27 emit regressions. s2 b3 DONE (2026-10-25): STEP 0 at the USER commit c418e33, gate byte for byte the b4 log; `Env.chain` and `Env.self` (Q-S7-6 (a), 4.7); gate EXIT 0 with the b4 counters except 58 examples, 247 evals, 9 runs, 14 run refusals and 48 evm steps. s2 b2 DONE (2026-10-25): STEP 0 at the USER commit 476d44a (tree aac47ee8: the b3 tree and a USER edit of `docs/host/README.md`), gate byte for byte the b3 log; the selected ring (Q-S7-3 (a), 4.7); gate EXIT 0 with the b3 counters except 59 examples, 253 evals, 163 precompile steps and the new line "selected ring: 2 rows, p2-elem runtime 16368 bytes". s2 DONE. s3a DONE (2026-10-25): STEP 0 at the USER commit e52bce8 (tree 011db849), gate byte for byte the s2 log; the size probe (4.7): the ring of Q-S7-5 (a) made the contract about 32 kB, over EIP-170; the USER ruled Q-S7-9 (a), the `flagIf` word memo of `src/lower.c`; gate EXIT 0 with the s2 counters except the line "selected ring: 2 rows, p2-elem runtime 15478 bytes" (was 16368). s3b part 1 DONE (2026-10-25): STEP 0 at the USER commit 77cd038 (tree 98737acb); the contract `examples/resolvekit.lang` (probe G, 24511 runtime bytes, 4.7); Q-S7-10 RULED; gate EXIT 0 with the s3a counters except 60 examples and 266 evals. s3b part 2 NEXT: the ballottool mode for the contract words. |
 | S8 | mutants, SPEC, VALIDATION, close | |
 
 ## 10. Open items
@@ -1207,3 +1281,17 @@ a recommendation (a). The USER ruled all five (a) (section 1).
   about 26 kB (an estimate). (c) Fewer markets: with 1 market the
   forecast is 25276 bytes and more, also over EIP-170.
   RULED: (a).
+- Q-S7-10 the size of the contract (4.7, the S7 s3b note). The first draft
+  has 29266 runtime bytes, more than EIP-170. The trims (one `ecAdd` value
+  for each tally point, and one binding for each repeated word) give 27815
+  bytes, also more. USER ruling 1: measure first (probes C, D and E:
+  without poll 0, with one market, and both). USER ruling 2, with the probe
+  numbers: "B + more keep", thus all S7 features stay with the `keep`
+  idiom (probe B, 24553 bytes). More `keep` sites made it larger (probe F,
+  24706 bytes), thus the base is probe B. Probe G removes two tests that
+  have no effect (24511 bytes). If s3c must make the contract larger than
+  24576 bytes, the question opens again with these options: poll 0 to S8
+  (probe C, 1228 bytes of room), or a word memo in `src/lower.c` for a word
+  that the kit inlines at more than one use.
+  RULED: measure first, then probe B with the `keep` idiom (the USER,
+  2026-10-25).

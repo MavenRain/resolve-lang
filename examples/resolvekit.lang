@@ -1,0 +1,360 @@
+-- The resolve-lang contract of PLAN section 7 (S7 s3b, PLAN 4.7): 3 members, 2 markets, poll 0 is the DAO poll.
+state State := makeState (used : Map U256 Flag) (pend : Map U256 U256) (stage : Map U256 U256) (tally : Map U256 U256) (book : Map U256 U256) (marks : Map U256 U256) (disputeWindow : U256) (voteWindow : U256)
+def init : State := makeState mapEmpty mapEmpty mapEmpty mapEmpty mapEmpty mapEmpty 5u 5u
+event Proposed (proposedIn : U256) (proposedOutcome : U256)
+event Disputed (disputedIn : U256) (disputedOutcome : U256)
+event Voted (imageX : U256) (imageY : U256)
+event Resolved (resolvedIn : U256) (resolvedOutcome : U256)
+def asset : Addr := 0x00000000000000000000000000000000000000ee
+def daoEnd : U256 := 10u
+def newDispute : U256 := 8u
+def newVote : U256 := 6u
+def ballotTag : U256 := 0x62616c6c6f74u
+
+def digestTag : U256 := 0x646967657374u
+
+def randTag : U256 := 0x72616e64u
+
+def onehotTag : U256 := 0x6f6e65686f74u
+
+def dleqTag : U256 := 1684825457u
+
+def p0x : U256 := 0x06fbb85ce7c2c09873be5ab2389eb799221394a446fcad08498d11d95992672au
+def p0y : U256 := 0x13e735dccd831c295e30e8b8257fae8fe9d6951bdbd426f3d5178d65d880faf3u
+def p1x : U256 := 0x2fb3971c4666f218aa4d8c7b83dd01bf612aaf4a703630270659a486cb93cb71u
+def p1y : U256 := 0x24c3571fa13578457a48e4caff9a903adee371aa5faf3001d7e2db64347ec6eau
+def p2x : U256 := 0x09f954aebe589dc0d4dc8fe818330ad269629714167c582998394076aaedd19cu
+def p2y : U256 := 0x058ba3cd6f305710a0294d2573118040e067d25519f6d753589e6c149e625a3fu
+def k1x : U256 := 0x1f8998908f24942c91e985c7d47ef1a72c4b50225e2eab95d035b5f35d266fb6u
+def k1y : U256 := 0x08e06bf52945ba6717f9228de2d3dba0ca205f0725120f2da2b61c3eaab51797u
+def k2x : U256 := 0x0157617a11853788bb8d67856a99d328ed1cb6e39bed065c5482dc9cacc0e601u
+def k2y : U256 := 0x10bc0e67568b5cc1a3c7cbde5e877ae062c7c9eb8c5ac2a281d006f71ba1e5dau
+def pkx : U256 := 0x0968d432a7834f16726268caca7e1a398153743ee91bff7afa02f0ca6fdd1cefu
+def pky : U256 := 0x1b03a01c8bb70557c6ae6cc0e854ca3f1ff99bf86a8c867437e1d654b8238854u
+def l1 : U256 := 0x0000000000000000000000000000000000000000000000000000000000000002u
+def l2 : U256 := 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000u
+def gen : Prod U256 U256 := pair 1u 2u
+
+-- -G = (r - 1) G = (1, p - 2).
+def negG : Prod U256 U256 := pair 1u 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd45u
+
+def maxWord : U256 := 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu
+
+def pointEq : (p q : Prod U256 U256) -> Flag :=
+  fun (p q : Prod U256 U256) => flagIf (u256Eq (first p) (first q)) (u256Eq (second p) (second q)) flagNo
+
+-- z P = A + e Q: 2 ecMul, 1 ecAdd.
+def holds : (p a q : Prod U256 U256) -> (z e : U256) -> Flag :=
+  fun (p a q : Prod U256 U256) (z e : U256) => pointEq (ecMul p z) (ecAdd a (ecMul q e))
+
+def randChallenge : (ctx pkx pky c1x c1y c2x c2y m ax ay bx by : U256) -> U256 :=
+  fun (ctx pkx pky c1x c1y c2x c2y m ax ay bx by : U256) =>
+    hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash randTag ctx) pkx) pky) c1x) c1y) c2x) c2y) m) ax) ay) bx) by
+
+def orChallenge : (ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y : U256) -> U256 :=
+  fun (ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y : U256) =>
+    hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash onehotTag ctx) j) pkx) pky) c1x) c1y) c2x) c2y) a0x) a0y) b0x) b0y) a1x) a1y) b1x) b1y
+
+def randWith : (pkx pky c1x c1y c2x c2y m ax ay bx by z e : U256) -> Flag :=
+  fun (pkx pky c1x c1y c2x c2y m ax ay bx by z e : U256) =>
+    flagIf (holds gen (pair ax ay) (pair c1x c1y) z e)
+      (holds (pair pkx pky) (pair bx by) (ecAdd (pair c2x c2y) (ecMul negG m)) z e)
+      flagNo
+
+def rand : (ctx pkx pky c1x c1y c2x c2y m ax ay bx by z : U256) -> Flag :=
+  fun (ctx pkx pky c1x c1y c2x c2y m ax ay bx by z : U256) =>
+    randWith pkx pky c1x c1y c2x c2y m ax ay bx by z (randChallenge ctx pkx pky c1x c1y c2x c2y m ax ay bx by)
+
+-- e0 + e1 = e modulo 2^256, as the host split. u256Add traps on an overflow
+-- and about one honest split in two wraps, so the check uses no add: e1 =
+-- e - e0 when e0 <= e, else e1 - 1 = maxWord - (e0 - e) with e1 >= 1. Each
+-- u256Sub of a taken branch is exact.
+def splitOk : (e e0 e1 : U256) -> Flag :=
+  fun (e e0 e1 : U256) =>
+    flagIf (u256Le e0 e) (u256Eq (u256Sub e e0) e1)
+      (flagIf (u256Le 1u e1) (u256Eq (u256Sub e1 1u) (u256Sub maxWord (u256Sub e0 e))) flagNo)
+
+def slotWith : (pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 e : U256) -> Flag :=
+  fun (pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 e : U256) =>
+    flagIf (splitOk e e0 e1)
+      (flagIf (holds gen (pair a0x a0y) (pair c1x c1y) z0 e0)
+        (flagIf (holds (pair pkx pky) (pair b0x b0y) (pair c2x c2y) z0 e0)
+          (flagIf (holds gen (pair a1x a1y) (pair c1x c1y) z1 e1)
+            (holds (pair pkx pky) (pair b1x b1y) (ecAdd (pair c2x c2y) negG) z1 e1)
+            flagNo)
+          flagNo)
+        flagNo)
+      flagNo
+
+def orSlot : (ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 : U256) -> Flag :=
+  fun (ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 : U256) =>
+    slotWith pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1
+      (orChallenge ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y)
+def dleqChallenge : (pkx pky cx cy dx dy ax ay bx by : U256) -> U256 :=
+  fun (pkx pky cx cy dx dy ax ay bx by : U256) =>
+    hash (hash (hash (hash (hash (hash (hash (hash (hash (hash dleqTag pkx) pky) cx) cy) dx) dy) ax) ay) bx) by
+
+
+def dleqWith : (pkx pky cx cy dx dy ax ay bx by z e : U256) -> Flag :=
+  fun (pkx pky cx cy dx dy ax ay bx by z e : U256) =>
+    flagIf (pointEq (ecMul (pair 1u 2u) z) (ecAdd (pair ax ay) (ecMul (pair pkx pky) e)))
+      (pointEq (ecMul (pair cx cy) z) (ecAdd (pair bx by) (ecMul (pair dx dy) e)))
+      flagNo
+
+def dleq : (pkx pky cx cy dx dy ax ay bx by z : U256) -> Flag :=
+  fun (pkx pky cx cy dx dy ax ay bx by z : U256) =>
+    dleqWith pkx pky cx cy dx dy ax ay bx by z (dleqChallenge pkx pky cx cy dx dy ax ay bx by)
+
+def opens : (ux uy vx vy n : U256) -> Flag :=
+  fun (ux uy vx vy n : U256) => pointEq (pair ux uy) (ecAdd (ecMul (pair 1u 2u) n) (pair vx vy))
+
+def sumWith : (ctx : U256) -> (c1 c2 : Prod U256 U256) -> (ax ay bx by z : U256) -> Flag :=
+  fun (ctx : U256) (c1 c2 : Prod U256 U256) (ax ay bx by z : U256) =>
+    rand ctx pkx pky (first c1) (second c1) (first c2) (second c2) 1u ax ay bx by z
+
+def digestOf : (u1x u1y u2x u2y v1x v1y v2x v2y : U256) -> U256 :=
+  fun (u1x u1y u2x u2y v1x v1y v2x v2y : U256) =>
+    hash (hash (hash (hash (hash (hash (hash (hash digestTag u1x) u1y) u2x) u2y) v1x) v1y) v2x) v2y
+
+def sum3 : (p q r : Prod U256 U256) -> Prod U256 U256 :=
+  fun (p q r : Prod U256 U256) => ecAdd (ecAdd p q) r
+
+def openSum : (c1 c2 : Prod U256 U256) -> (cx cy ex ey d1x d1y a1x a1y b1x b1y z1 d2x d2y a2x a2y b2x b2y z2 m : U256) -> Flag :=
+  fun (c1 c2 : Prod U256 U256) (cx cy ex ey d1x d1y a1x a1y b1x b1y z1 d2x d2y a2x a2y b2x b2y z2 m : U256) =>
+    flagIf (pointEq c1 (pair cx cy))
+      (flagIf (pointEq c2 (pair ex ey))
+        (flagIf (dleq k1x k1y cx cy d1x d1y a1x a1y b1x b1y z1)
+          (flagIf (dleq k2x k2y cx cy d2x d2y a2x a2y b2x b2y z2)
+            (pointEq (pair ex ey) (ecAdd (ecMul gen m) (ecAdd (ecMul (pair d1x d1y) l1) (ecMul (pair d2x d2y) l2))))
+            flagNo)
+          flagNo)
+        flagNo)
+      flagNo
+def g : Prod U256 U256 := pair 1u 2u
+def frR : U256 := 21888242871839275222246405745257275088548364400416034343698204186575808495617u
+def reduceOnce : U256 -> U256 := fun (x : U256) => flagIf (u256Le frR x) (u256Sub x frR) x
+def modR : U256 -> U256 := fun (x : U256) => reduceOnce (reduceOnce (reduceOnce (reduceOnce (reduceOnce x))))
+def domainOf : U256 -> Addr -> U256 := fun (c : U256) (a : Addr) => hash c (addrToU256 a)
+def deployment : U256 := domainOf 1u 0x0000000000000000000000007265636569766572
+def tweakTag : U256 := 1u
+def numsTag : U256 := 2u
+def daoTag : U256 := 3u
+def disputeOf : U256 -> U256 := fun (m : U256) => hash deployment m
+def daoPoll : U256 := hash daoTag deployment
+def tweakOf : U256 -> U256 := fun (d : U256) => modR (hash tweakTag d)
+def tweaked : U256 -> Prod U256 U256 -> Prod U256 U256 := fun (d : U256) (p : Prod U256 U256) => ecAdd p (ecMul g (tweakOf d))
+def nums : U256 -> Prod U256 U256 := fun (i : U256) => zkHp (ecMul g (modR (hash numsTag i)))
+def a0 : Addr := 0x00000000000000000000000000000000000000a0
+def a1 : Addr := 0x00000000000000000000000000000000000000a1
+def a2 : Addr := 0x00000000000000000000000000000000000000a2
+def key : U256 -> Addr -> U256 := fun (m : U256) (a : Addr) => hash m (addrToU256 a)
+def pollId : U256 -> U256 := fun (q : U256) => flagIf (u256Eq q 0u) daoPoll (flagIf (u256Eq q 1u) (disputeOf 0u) (disputeOf 1u))
+def mslot : State -> U256 -> Addr -> Prod U256 U256 -> U256 -> Prod U256 U256 :=
+  fun (s : State) (m : U256) (a : Addr) (p : Prod U256 U256) (i : U256) =>
+    flagIf (u256Eq (mapGet (book s) (key m a)) 0u) (tweaked (disputeOf m) p) (nums i)
+def ringSlot : State -> U256 -> Addr -> Prod U256 U256 -> U256 -> Prod U256 U256 :=
+  fun (s : State) (q : U256) (a : Addr) (p : Prod U256 U256) (i : U256) =>
+    flagIf (u256Eq q 0u) (tweaked daoPoll p) (flagIf (u256Eq q 1u) (mslot s 0u a p i) (mslot s 1u a p i))
+def ringOf : State -> U256 -> List (Prod U256 U256) :=
+  fun (s : State) (q : U256) => cons (ringSlot s q a0 (pair p0x p0y) 0u) (cons (ringSlot s q a1 (pair p1x p1y) 1u) (cons (ringSlot s q a2 (pair p2x p2y) 2u) nil))
+def here : Env -> Flag := fun (env : Env) => u256Eq (domainOf (chain env) (self env)) deployment
+def known : U256 -> Flag := fun (m : U256) => u256Le m 1u
+def deadlineOf : U256 -> U256 := fun (m : U256) => flagIf (u256Eq m 0u) 10u 20u
+def ruleOf : U256 -> U256 -> U256 := fun (m : U256) (r : U256) => flagIf (u256Eq m 0u) (flagIf (u256Le 50u r) 0u 1u) (flagIf (u256Le r 30u) 0u 1u)
+def poolKey : U256 -> U256 -> U256 := fun (m : U256) (o : U256) => hash (hash m 7u) o
+def field : State -> U256 -> U256 -> U256 := fun (s : State) (m : U256) (f : U256) => mapGet (marks s) (hash m f)
+def withBook : State -> Map U256 U256 -> State := fun (s : State) (b : Map U256 U256) => makeState (used s) (pend s) (stage s) (tally s) b (marks s) (disputeWindow s) (voteWindow s)
+def withRec : State -> Map U256 U256 -> State := fun (s : State) (r : Map U256 U256) => makeState (used s) (pend s) (stage s) (tally s) (book s) r (disputeWindow s) (voteWindow s)
+def nullOf : (ix iy q : U256) -> U256 := fun (ix iy q : U256) => hash (hash ix iy) q
+def ctxOf : (ix iy q : U256) -> U256 := fun (ix iy q : U256) => hash (hash (hash ballotTag ix) iy) (pollId q)
+def kept : (p : Map U256 U256) -> (n k : U256) -> Prod U256 U256 :=
+  fun (p : Map U256 U256) (n k : U256) => pair (mapGet p (hash n k)) (mapGet p (hash n (u256Add k 1u)))
+def slotBase : (j : U256) -> U256 := fun (j : U256) => u256Add (u256Add j j) (u256Add j j)
+-- A word as one IF, thus one value for the flagIf memo: a second use reads the local (block >= 0 at each entry).
+def keep : Env -> U256 -> U256 := fun (env : Env) (x : U256) => flagIf (u256Le 0u (block env)) x 0u
+def keptK : Env -> Map U256 U256 -> U256 -> U256 -> Prod U256 U256 :=
+  fun (env : Env) (p : Map U256 U256) (n k : U256) => pair (keep env (mapGet p (hash n k))) (keep env (mapGet p (hash n (u256Add k 1u))))
+def pollOpen : Env -> State -> U256 -> Flag :=
+  fun (env : Env) (s : State) (q : U256) =>
+    flagIf (u256Eq q 0u) (u256Le (block env) daoEnd)
+      (flagIf (u256Eq (field s (u256Sub q 1u) 4u) 1u) (u256Le (block env) (field s (u256Sub q 1u) 6u)) flagNo)
+def pollShut : Env -> State -> U256 -> Flag :=
+  fun (env : Env) (s : State) (q : U256) =>
+    flagIf (u256Eq q 0u) (u256Le (u256Add daoEnd 1u) (block env))
+      (flagIf (u256Eq (field s (u256Sub q 1u) 4u) 1u) (u256Le (u256Add (field s (u256Sub q 1u) 6u) 1u) (block env)) flagNo)
+def sigOk : (s : State) -> (q u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 ix iy : U256) -> Flag :=
+  fun (s : State) (q u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 ix iy : U256) =>
+    zkVerify (ringOf s q) (pollId q) (digestOf u1x u1y u2x u2y v1x v1y v2x v2y) (cons c1 (cons s1 (cons s2 (cons s3 (cons ix (cons iy nil))))))
+
+-- Entry take m o x (L7): the stake of the caller in m (the stake test of the ring), its stake on o, the pool of o and the total pool grow by x.
+def take : (env : Env) -> (s : State) -> (m o x : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (m o x : U256) =>
+    flagIf (here env) (flagIf (known m) (flagIf (u256Le o 1u) (flagIf (u256Le (deadlineOf m) (block env)) none
+      (some (pair (withBook s (mapSet (mapSet (mapSet (mapSet (book s)
+          (key m (caller env)) (u256Add (mapGet (book s) (key m (caller env))) x))
+          (hash (key m (caller env)) o) (u256Add (mapGet (book s) (hash (key m (caller env)) o)) x))
+          (poolKey m o) (u256Add (mapGet (book s) (poolKey m o)) x))
+          (poolKey m 2u) (u256Add (mapGet (book s) (poolKey m 2u)) x)))
+        (cons (pull asset (caller env) (self env) x) nil)))) none) none) none
+
+-- The outputs of propose and challenge. The rule O is one value, thus one IF.
+def proposedOf : Env -> State -> U256 -> U256 -> U256 -> Prod State (List Out) :=
+  fun (env : Env) (s : State) (m r o : U256) =>
+    pair (withRec s (mapSet (mapSet (mapSet (mapSet (marks s) (hash m 0u) 1u) (hash m 1u) o) (hash m 2u) (u256Add (block env) (disputeWindow s))) (hash m 3u) r)) (cons (Proposed m o) nil)
+def challengedOf : Env -> State -> U256 -> U256 -> Prod State (List Out) :=
+  fun (env : Env) (s : State) (m o : U256) =>
+    pair (withRec s (mapSet (mapSet (mapSet (marks s) (hash m 4u) 1u) (hash m 5u) o) (hash m 6u) (u256Add (block env) (voteWindow s)))) (cons (Disputed m o) nil)
+
+-- Entry propose m r: at or after the deadline, one time. Fields 0 (proposed), 1 (rule m r), 2 (last challenge block), 3 (r).
+def propose : (env : Env) -> (s : State) -> (m r : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (m r : U256) =>
+    flagIf (here env) (flagIf (known m) (flagIf (u256Le (deadlineOf m) (block env)) (flagIf (u256Eq (field s m 0u) 0u)
+      (some (proposedOf env s m r (ruleOf m r))) none) none) none) none
+
+-- Entry challenge m t (Q-S7-1 (a)): within the stored dispute deadline, one time, refused when rule m t is rule m r (L5). Fields 4, 5, 6 (last voting block). Poll m + 1 opens.
+def challenge : (env : Env) -> (s : State) -> (m t : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (m t : U256) =>
+    flagIf (here env) (flagIf (u256Eq (field s m 0u) 1u) (flagIf (u256Eq (field s m 4u) 0u)
+      (flagIf (u256Le (block env) (field s m 2u)) (flagIf (u256Eq (ruleOf m t) (field s m 1u)) none
+        (some (challengedOf env s m (ruleOf m t)))) none) none) none) none
+
+-- Entry castSig (15 words): poll q open, N not used, the bLSAG over the selected ring of q, then the 8 words to pend.
+def castSigAt : (n : U256) -> (env : Env) -> (s : State) -> (q ix iy u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 : U256) -> Option (Prod State (List Out)) :=
+  fun (n : U256) (env : Env) (s : State) (q ix iy u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 : U256) =>
+    flagIf (mapGet (used s) n) none
+      (flagIf (sigOk s q u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 ix iy)
+        (some (pair (makeState (used s)
+          (mapSet (mapSet (mapSet (mapSet (mapSet (mapSet (mapSet (mapSet (pend s)
+            (hash n 0u) u1x) (hash n 1u) u1y) (hash n 2u) u2x) (hash n 3u) u2y) (hash n 4u) v1x) (hash n 5u) v1y) (hash n 6u) v2x) (hash n 7u) v2y)
+          (mapSet (mapSet (mapSet (stage s) n 1u) (hash n 0u) 0u) (hash n 1u) 0u)
+          (tally s) (book s) (marks s) (disputeWindow s) (voteWindow s)) nil))
+        none)
+def castSig : (env : Env) -> (s : State) -> (q ix iy u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (q ix iy u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 : U256) =>
+    flagIf (here env) (flagIf (pollOpen env s q)
+      (castSigAt (keep env (nullOf ix iy q)) env s q ix iy u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3) none) none
+
+-- Entry castSlot (16 words): N has a castSig, j is 0 or 1, the OR proof of slot j on the kept words, then the flag of slot j.
+def slotAt : (c1 c2 : Prod U256 U256) -> (n : U256) -> (env : Env) -> (s : State) -> (q ix iy j a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 : U256) -> Option (Prod State (List Out)) :=
+  fun (c1 c2 : Prod U256 U256) (n : U256) (env : Env) (s : State) (q ix iy j a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 : U256) =>
+    flagIf (orSlot (ctxOf ix iy q) j pkx pky (first c1) (second c1) (first c2) (second c2) a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1)
+      (some (pair (makeState (used s) (pend s) (mapSet (stage s) (hash n j) 1u) (tally s) (book s) (marks s) (disputeWindow s) (voteWindow s)) nil))
+      none
+def slotN : (n : U256) -> (env : Env) -> (s : State) -> (q ix iy j a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 : U256) -> Option (Prod State (List Out)) :=
+  fun (n : U256) (env : Env) (s : State) (q ix iy j a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 : U256) =>
+    flagIf (u256Eq (mapGet (stage s) n) 1u) (flagIf (u256Le j 1u)
+      (slotAt (keptK env (pend s) n (slotBase j)) (keptK env (pend s) n (u256Add (slotBase j) 2u)) n env s q ix iy j a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1) none) none
+def castSlot : (env : Env) -> (s : State) -> (q ix iy j a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (q ix iy j a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 : U256) => flagIf (here env) (slotN (keep env (nullOf ix iy q)) env s q ix iy j a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1) none
+
+-- The tally of poll q: word k (0..7) at hash q k (T0 c1 c2, then T1 c1 c2), the casts at hash q 8, the opening at hash q 9 (1 fail or tie, 2 pass).
+def tpoint : Map U256 U256 -> U256 -> U256 -> Prod U256 U256 := fun (t : Map U256 U256) (q k : U256) => pair (mapGet t (hash q k)) (mapGet t (hash q (u256Add k 1u)))
+-- The sum R is one value, thus one STATICCALL for its two words (the curve memo).
+def setAt : Map U256 U256 -> U256 -> U256 -> Prod U256 U256 -> Map U256 U256 :=
+  fun (w : Map U256 U256) (q k : U256) (r : Prod U256 U256) => mapSet (mapSet w (hash q k) (first r)) (hash q (u256Add k 1u)) (second r)
+def addAt : Map U256 U256 -> Map U256 U256 -> U256 -> U256 -> Prod U256 U256 -> Map U256 U256 :=
+  fun (w : Map U256 U256) (t : Map U256 U256) (q k : U256) (p : Prod U256 U256) => setAt w q k (ecAdd (tpoint t q k) p)
+
+-- Entry castSeal (8 words): N not used, both slot flags, poll q open, the sum proof, then the tally add of poll q.
+def sealAt : (p0 p2 p4 p6 : Prod U256 U256) -> (n : U256) -> (env : Env) -> (s : State) -> (q ix iy ax ay bx by z : U256) -> Option (Prod State (List Out)) :=
+  fun (p0 p2 p4 p6 : Prod U256 U256) (n : U256) (env : Env) (s : State) (q ix iy ax ay bx by z : U256) =>
+    flagIf (sumWith (ctxOf ix iy q) (ecAdd p0 p4) (ecAdd p2 p6) ax ay bx by z)
+      (some (pair (makeState (mapSet (used s) n flagYes) (pend s) (stage s)
+        (mapSet (addAt (addAt (addAt (addAt (tally s) (tally s) q 0u p0) (tally s) q 2u p2) (tally s) q 4u p4) (tally s) q 6u p6)
+          (hash q 8u) (u256Add (mapGet (tally s) (hash q 8u)) 1u))
+        (book s) (marks s) (disputeWindow s) (voteWindow s)) (cons (Voted ix iy) nil)))
+      none
+def sealN : (n : U256) -> (env : Env) -> (s : State) -> (q ix iy ax ay bx by z : U256) -> Option (Prod State (List Out)) :=
+  fun (n : U256) (env : Env) (s : State) (q ix iy ax ay bx by z : U256) =>
+    flagIf (mapGet (used s) n) none
+      (flagIf (u256Eq (mapGet (stage s) n) 1u) (flagIf (u256Eq (mapGet (stage s) (hash n 0u)) 1u) (flagIf (u256Eq (mapGet (stage s) (hash n 1u)) 1u)
+        (sealAt (keptK env (pend s) n 0u) (keptK env (pend s) n 2u) (keptK env (pend s) n 4u) (keptK env (pend s) n 6u) n env s q ix iy ax ay bx by z)
+        none) none) none)
+def castSeal : (env : Env) -> (s : State) -> (q ix iy ax ay bx by z : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (q ix iy ax ay bx by z : U256) =>
+    flagIf (here env) (flagIf (pollOpen env s q) (sealN (keep env (nullOf ix iy q)) env s q ix iy ax ay bx by z) none) none
+
+-- The state after the opening of poll q. PASS (1 fail or tie, 2 pass) is one value, thus one IF.
+def opened : State -> U256 -> U256 -> State :=
+  fun (s : State) (q pass : U256) => makeState (used s) (pend s) (stage s) (mapSet (tally s) (hash q 9u) pass) (book s) (marks s)
+    (flagIf (u256Eq q 0u) (flagIf (u256Eq pass 2u) newDispute (disputeWindow s)) (disputeWindow s))
+    (flagIf (u256Eq q 0u) (flagIf (u256Eq pass 2u) newVote (voteWindow s)) (voteWindow s))
+
+-- Entry openTally (16 words, Q-S7-5 (a)): poll q shut, not opened, n <= casts, the opening of T1 (the right slot) with the
+-- quorum {1, 2}. A pass is n > casts - n (a tie keeps, Q-S7-8 (a)). Poll 0 sets the windows by decide.
+def openAt : (c1 c2 : Prod U256 U256) -> (casts : U256) -> (env : Env) -> (s : State) -> (q d1x d1y a1x a1y b1x b1y z1 d2x d2y a2x a2y b2x b2y z2 n : U256) -> Option (Prod State (List Out)) :=
+  fun (c1 c2 : Prod U256 U256) (casts : U256) (env : Env) (s : State) (q d1x d1y a1x a1y b1x b1y z1 d2x d2y a2x a2y b2x b2y z2 n : U256) =>
+    flagIf (u256Le n casts)
+      (flagIf (openSum c1 c2 (first c1) (second c1) (first c2) (second c2) d1x d1y a1x a1y b1x b1y z1 d2x d2y a2x a2y b2x b2y z2 n)
+        (some (pair (opened s q (flagIf (u256Le n (u256Sub casts n)) 1u 2u)) nil))
+        none)
+      none
+def openTally : (env : Env) -> (s : State) -> (q d1x d1y a1x a1y b1x b1y z1 d2x d2y a2x a2y b2x b2y z2 n : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (q d1x d1y a1x a1y b1x b1y z1 d2x d2y a2x a2y b2x b2y z2 n : U256) =>
+    flagIf (here env) (flagIf (pollShut env s q) (flagIf (u256Eq (mapGet (tally s) (hash q 9u)) 0u)
+      (openAt (keptK env (tally s) q 4u) (keptK env (tally s) q 6u) (keep env (mapGet (tally s) (hash q 8u))) env s q d1x d1y a1x a1y b1x b1y z1 d2x d2y a2x a2y b2x b2y z2 n)
+      none) none) none
+
+-- The outcome of m: the challenge outcome after a pass of poll m + 1, else the proposal.
+def outcomeOf : State -> U256 -> U256 :=
+  fun (s : State) (m : U256) => flagIf (u256Eq (mapGet (tally s) (hash (u256Add m 1u) 9u)) 2u) (field s m 5u) (field s m 1u)
+
+-- The output of finalize. The outcome O is one value, thus one IF.
+def finalOf : State -> U256 -> U256 -> Prod State (List Out) :=
+  fun (s : State) (m o : U256) => pair (withRec s (mapSet (mapSet (marks s) (hash m 7u) 1u) (hash m 8u) o)) (cons (Resolved m o) nil)
+
+-- Entry finalize m: after disputeWindow with no challenge, or after the opening of poll m + 1. Fields 7 and 8.
+def finalize : (env : Env) -> (s : State) -> (m : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (m : U256) =>
+    flagIf (here env) (flagIf (known m) (flagIf (u256Eq (field s m 0u) 1u) (flagIf (u256Eq (field s m 7u) 0u)
+      (flagIf (flagIf (u256Eq (field s m 4u) 1u) (u256Le 1u (mapGet (tally s) (hash (u256Add m 1u) 9u)))
+            (u256Le (u256Add (field s m 2u) 1u) (block env)))
+        (some (finalOf s m (outcomeOf s m)))
+        none) none) none) none) none
+
+-- Entry claim m (Q-S7-7 (a)): pays floor(stake * pool / winPool); reverts when the product wraps.
+def stakeWin : State -> U256 -> Addr -> U256 := fun (s : State) (m : U256) (a : Addr) => mapGet (book s) (hash (key m a) (field s m 8u))
+def claim : (env : Env) -> (s : State) -> (m : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (m : U256) =>
+    flagIf (here env) (flagIf (u256Eq (field s m 7u) 1u)
+      (flagIf (u256Eq (u256Div (u256Mul (stakeWin s m (caller env)) (mapGet (book s) (poolKey m 2u))) (stakeWin s m (caller env))) (mapGet (book s) (poolKey m 2u)))
+        (some (pair (withBook s (mapSet (book s) (hash (key m (caller env)) (field s m 8u)) 0u))
+          (cons (pay asset (caller env) (u256Div (u256Mul (stakeWin s m (caller env)) (mapGet (book s) (poolKey m 2u))) (mapGet (book s) (poolKey m (field s m 8u))))) nil)))
+        none) none) none
+
+-- Views.
+def stakeOf : (env : Env) -> (s : State) -> (m : U256) -> (a : Addr) -> U256 := fun (env : Env) (s : State) (m : U256) (a : Addr) => mapGet (book s) (key m a)
+def fieldOf : (env : Env) -> (s : State) -> (m f : U256) -> U256 := fun (env : Env) (s : State) (m f : U256) => field s m f
+def pollWord : (env : Env) -> (s : State) -> (q k : U256) -> U256 := fun (env : Env) (s : State) (q k : U256) => mapGet (tally s) (hash q k)
+def windows : (env : Env) -> (s : State) -> U256 := fun (env : Env) (s : State) => u256Add (u256Mul (disputeWindow s) 256u) (voteWindow s)
+-- The eval rows of test/eval/expect.txt. These defs are not entries.
+def ruleIs : Nat -> Nat -> Nat -> Flag := fun (m r o : Nat) => u256Eq (ruleOf (toU256 m) (toU256 r)) (toU256 o)
+def pollSame : Nat -> Nat -> Flag := fun (a b : Nat) => u256Eq (pollId (toU256 a)) (pollId (toU256 b))
+def knownIs : Nat -> Flag := fun (m : Nat) => known (toU256 m)
+def deadlineIs : Nat -> Nat -> Flag := fun (m d : Nat) => u256Eq (deadlineOf (toU256 m)) (toU256 d)
+def membersAreKeys : Flag :=
+  flagIf (pointEq (pair p0x p0y) (ecMul g (zkKey 0)))
+    (flagIf (pointEq (pair p1x p1y) (ecMul g (zkKey 1))) (pointEq (pair p2x p2y) (ecMul g (zkKey 2))) flagNo) flagNo
+
+-- DAO updates apply to future proposals and challenges; existing deadlines stay fixed.
+def reviewEnv : U256 -> Env := fun (b : U256) => makeEnv 0 b 0x00000000000000000000000000000000000000bb 1u 0x0000000000000000000000007265636569766572
+def reviewState : Option (Prod State (List Out)) -> State :=
+  fun (r : Option (Prod State (List Out))) => option init (fun (p : Prod State (List Out)) => first p) r
+def reviewAccepted : Option (Prod State (List Out)) -> Flag :=
+  fun (r : Option (Prod State (List Out))) => option flagNo (fun (p : Prod State (List Out)) => flagYes) r
+def reviewProposal : State := reviewState (propose (reviewEnv 10u) init 0u 50u)
+def reviewDisputed : State := reviewState (challenge (reviewEnv 11u) reviewProposal 0u 0u)
+def reviewUpdated : State := opened reviewProposal 0u 2u
+def challengeAtEnd : Flag := reviewAccepted (challenge (reviewEnv 15u) reviewUpdated 0u 0u)
+def challengeAfterEnd : Flag := reviewAccepted (challenge (reviewEnv 16u) reviewUpdated 0u 0u)
+def finalizeAfterEnd : Flag := reviewAccepted (finalize (reviewEnv 16u) reviewUpdated 0u)
+def challengeAfterFinal : Flag := reviewAccepted (challenge (reviewEnv 17u) (opened (reviewState (finalize (reviewEnv 16u) reviewProposal 0u)) 0u 2u) 0u 0u)
+def voteAtEnd : Flag := pollOpen (reviewEnv 16u) (opened reviewDisputed 0u 2u) 1u
+def voteAfterEnd : Flag := pollOpen (reviewEnv 17u) (opened reviewDisputed 0u 2u) 1u
+def openAfterEnd : Flag := pollShut (reviewEnv 17u) (opened reviewDisputed 0u 2u) 1u
+def futureProposal : State := reviewState (propose (reviewEnv 12u) (opened init 0u 2u) 0u 50u)
+def futureChallengeAtEnd : Flag := reviewAccepted (challenge (reviewEnv 20u) futureProposal 0u 0u)
+def futureChallengeAfterEnd : Flag := reviewAccepted (challenge (reviewEnv 21u) futureProposal 0u 0u)
+def futureDisputed : State := reviewState (challenge (reviewEnv 12u) futureProposal 0u 0u)
+def futureVoteAtEnd : Flag := pollOpen (reviewEnv 18u) futureDisputed 1u
+def futureVoteAfterEnd : Flag := pollOpen (reviewEnv 19u) futureDisputed 1u
