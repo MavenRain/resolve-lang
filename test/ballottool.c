@@ -359,13 +359,16 @@ static void poll_words(const char *q, const Poll *p) {
    pass). Member 1 has a stake in market 0, thus poll 1 (prefix q1) has the
    ring K_0 + t1 G, nums 1, K_2 + t1 G and the casts of voters 0 and 2
    (slots 1, 0): q1t1 opens T1 to 1 of 2 (a tie), and q1w1 opens T1 of the
-   cast of voter 0 only to 1 of 1 (a pass). The regressions come first: each
-   cast verifies in its poll and not in the other poll, and each T1 opens to
+   cast of voter 0 only to 1 of 1 (a pass). The ballot q1ab1 is the cast of
+   member 1 (a1) in poll 1 over the ring with no mask, K_v + t1 G (S8 s2,
+   Q-S8-3 (a)): the contract must refuse it. The regressions come first: each
+   cast verifies in its poll and not in the other poll, q1ab1 verifies over
+   the ring with no mask and not over the ring of poll 1, and each T1 opens to
    its count. PRINT 1 prints the words. 1, or 0 when a step fails. */
 static int contract(const G1 *pk, const G1 *base, const ThrShare *shares, int print) {
   static const uint32_t choice0[N] = {1u, 1u, 0u};
   static const uint32_t choice1[N] = {1u, 0u, 0u};
-  static Poll p[2];
+  static Poll p[3];
   ThrPart parts[2];
   ElgCipher t;
   U256 id0;
@@ -376,7 +379,8 @@ static int contract(const G1 *pk, const G1 *base, const ThrShare *shares, int pr
   uint32_t v;
   int ok = 1;
   poll_ids(&id0, &id1);
-  if (!poll_of(&p[0], base, pk, &id0, N, choice0) || !poll_of(&p[1], base, pk, &id1, 1u, choice1))
+  if (!poll_of(&p[0], base, pk, &id0, N, choice0) || !poll_of(&p[1], base, pk, &id1, 1u, choice1)
+      || !poll_of(&p[2], base, pk, &id1, N, choice1))
     return fail("contract casts");
   for (q = 0; q < 2u; q++)
     for (v = 0; v < p[q].count; v++)
@@ -384,6 +388,9 @@ static int contract(const G1 *pk, const G1 *base, const ThrShare *shares, int pr
   ok &= (blsag_verify(p[1].ring, N, &p[1].id, &p[0].b[0].digest, p[0].b[0].sig) == BLSAG_REJECT
          && blsag_verify(p[0].ring, N, &p[0].id, &p[1].b[0].digest, p[1].b[0].sig) == BLSAG_REJECT)
         || fail("contract cast at the other poll");
+  ok &= (blsag_verify(p[2].ring, N, &p[2].id, &p[2].b[1].digest, p[2].b[1].sig) == BLSAG_ACCEPT
+         && blsag_verify(p[1].ring, N, &p[1].id, &p[2].b[1].digest, p[2].b[1].sig) == BLSAG_REJECT)
+        || fail("contract cast of member 1 over the ring with no mask");
   ok &= (t1_count(&p[0], shares, 3u, 2u) && t1_count(&p[1], shares, 2u, 1u) && t1_count(&p[1], shares, 1u, 1u))
         || fail("contract tally");
   if (!ok || !print)
@@ -405,6 +412,7 @@ static int contract(const G1 *pk, const G1 *base, const ThrShare *shares, int pr
   poll_words("q1", &p[1]);
   t1_words("q1t1", &p[1], shares, 2u, 1u, &l1, &l2);
   t1_words("q1w1", &p[1], shares, 1u, 1u, &l1, &l2);
+  ballot_words("q1ab1", &p[2].b[1]);
   return 1;
 }
 

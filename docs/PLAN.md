@@ -899,6 +899,56 @@ Notes on the table:
   before its run and after restoration (make 3.81 compares mtimes to the
   second).
 
+**The S8 s2 result (2026-10-26).** STEP 0 at the USER commit 3972f71
+(tree 921bde73: the S8 s1 tree and the USER edit of the runner notes
+above). The gate is EXIT 0, byte for byte the S8 s1 log. The runner
+(`~/Documents/resolve-lang-work/S8-mutants.sh`) replaces the old text one
+time, on the named line, in the named def. All eight mutants pass
+`langc --kit check`: no mutant is bad. Run 1 used the S7 s4 rows. M1 to
+M7 were KILLED, and M8 survived, as predicted. Then s2 added the new rows
+(Q-S8-2 (a), Q-S8-3 (a), the two findings below). Run 2 (base, M7, M8) and
+run 3 (M1 to M6) used the new rows. The chain steps in the table have the
+numbers of the new rows (65 steps). "Run row n" is a row of
+`test/run/resolvekit.script`, which did not change.
+
+| Mutant | Predicted rows | Real run rows | Real chain steps that fail | Result |
+|---|---|---|---|---|
+| M1 | run rows 14, 39; the chain L5 challenge | 14 and 39 (revert to ok), as predicted; also 27, 28 (revert to ok) and 15, 30, 32, 41, 43, 45 (ok to revert); `resolvekit.a1.script` (it has row 14) | 34 (the L5 challenge: want revert, got ok), 36 (the challenge of 0: want ok, got revert) | KILLED |
+| M2 | run rows 31, 33, 34; the chain field 8 | 31 (`pollWord 1u 9u`: 1u to 2u), 33 (field 8: 0u to 1u), 34 (claim: ok to revert), as predicted | 58 (pollWord: want 1, got 2), 62 (field 8: want 0, got 1), 64 (claim: want ok, got revert), the mock balance of a1 (want 7, got none) | KILLED |
+| M3 | run row 24; the chain second castSig | 24 (revert to ok), as predicted; `resolvekit.a1.script` (it has row 24) | 6 (castSig: want revert, got ok) | KILLED |
+| M4 | run row 42 | 42 (revert to ok), as predicted | 35 (the challenge after field 2: want revert, got ok), not predicted; then 36, 37 (field 2: want 13, got 1b), 39, 57, 58, 60, 61, 64 and the mock balance of a1 | KILLED |
+| M5 | the chain castSig at BLOCK 20 | none, as predicted | 39 (castSig at field 6 + 1: want revert, got ok) | KILLED (chain only) |
+| M6 | run rows 35, 44; the chain second claim | 35 and 44 (revert to ok), as predicted | 65 (the second claim: want revert, got ok) | KILLED |
+| M7 | run rows 16 to 23; the chain casts of poll 1 | 16 to 23 (ok to revert), as predicted; also 26 and 31 (pollWord to 0u), 30, 32, 34 (ok to revert); row 25 of `resolvekit.a1.script` (revert to ok) | 40 to 47 (the casts of poll 1: want ok, got revert), 48 (the a1 castSig: want revert, got ok), then 49 to 53, 57, 58, 60, 61, 64 and the mock balance of a1 (20 FAIL lines) | KILLED |
+| M8 | none (Q-S8-2) | run 1: none (M8 survived); run 2: row 1 of `resolvekit.chain.script` and of `resolvekit.self.script` (revert to ok) | run 1: none; run 2: 26 and 27 (the two domain takes: want revert, got ok), 29 (stakeOf: want 7, got 15), the mock balance of a1 (want 7, got 15) | KILLED by the new rows |
+
+Notes on the result:
+
+- Each mutant changes the size rows of `test/resolvekit.sh`. This is not
+  a kill. Each guest diff with a changed `state` line also has a changed
+  numbered row.
+- M4: chain step 35 kills M4 directly. The 4.8 table did not predict it:
+  the chain test has the row "a challenge after field 2" (4.7, s3c).
+- M7: the a1 row kills M7 directly. Under M7, the fixture rows 16 to 23
+  revert first, but row 25 of `resolvekit.a1.script` and chain step 48
+  change from revert to ok. Thus the a1 row is a kill now and a guard for
+  a future fixture.
+- Finding 1: the run reader takes one `env` line, before the first call
+  (`src/front/check.c`, line 5012). Thus a domain row cannot follow row
+  49 of `resolvekit.script`. s2 added two one-row scripts:
+  `test/run/resolvekit.chain.script` (env chain 2u, the receiver address)
+  and `test/run/resolvekit.self.script` (env chain 1u, the address
+  0x...c1). Row 1 of each is the take of run row 1 (`take 1u 0u 3u` at
+  BLOCK 1u from 0x...bb). Each prints `1 take revert`. `test/run.sh` runs
+  `examples/NAME.lang` for `test/run/NAME.TAG.script`.
+- Finding 2: after row 49, poll 1 has its tally. An a1 cast there reverts
+  for a different reason, and a new row changes the numbers of the rows
+  after it. Thus `test/run/resolvekit.a1.script` is rows 1 to 24 of
+  `resolvekit.script` and row 25: the a1 cast over the ring of poll 1
+  with no mask (the words q1ab1 of `build/ballottool contract`) at BLOCK
+  13u. It prints `25 castSig revert`. `resolvekit.script` and its `.out`
+  do not change, and the row numbers of the 4.8 table stay.
+
 **SPEC.md.** SPEC.md is the intent-lang text with the four name edits of
 section 6. It has no word of the market, the dispute or the contract. The
 SPEC items of this plan are the non-goal of 4.3 (a stake through another
@@ -1135,6 +1185,21 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
   `test/resolvekit.sh` test the mask. `test/run/ring.script` has the two
   `take` rows of S5 (a take at block 5 counts, and a take at block 12
   reverts).
+- As built (S8 s2): the kill rows of M7 and M8 (4.8, Q-S8-2 (a), Q-S8-3
+  (a)). `test/ballottool.c`: poll 1 with no mask (`p[2]`), a regression
+  (the ballot of a1 verifies over the ring with no mask and fails over
+  the masked ring), and the words q1ab1 (the a1 cast over the ring with
+  no mask). Three run scripts from the generator
+  `~/Documents/resolve-lang-work/S8-s2-gen-runscript.sh`:
+  `test/run/resolvekit.a1.script` (rows 1 to 24 of `resolvekit.script`,
+  then `25 castSig revert`), `test/run/resolvekit.chain.script` and
+  `test/run/resolvekit.self.script` (`1 take revert` on chain 2u, and at
+  the address 0x...c1). `test/run.sh` runs `examples/NAME.lang` for
+  `test/run/NAME.TAG.script`. `test/resolvekit.sh` has 65 chain steps
+  (was 62): before the mock take of a1, a take on chain 2 and a take at
+  the receiver 0x...c1 (both revert, and the config is restored), and
+  after `cast 1 2 15`, the a1 castSig over the ring with no mask (revert).
+  `make check` runs 13 run scripts (was 10).
 
 ## 9. Slices
 
@@ -1148,7 +1213,7 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S5 | the position ledger, the freeze, the masked ring, the key image for each dispute (O10) | s1 DONE (2026-10-24): STEP 0 gate EXIT 0, byte for byte the S4 log; probes P1 to P3 (4.3); the tweak form of the key image replaces `Hp(K, poll)` (4.3), Q-S5-1 to Q-S5-3 OPEN; docs only. s2 DONE (2026-10-24): Q-S5-1 to Q-S5-3 RULED (a); `examples/ledger.lang` (L7), `examples/ring.lang` (L8, O10), two run scripts and 11 ring eval rows (section 8). `make -B check` EXIT 0 with the S4 counters except 55 examples, 209 evals and 8 runs. No blsagtool, precompile, host or DAO writer row moves. DONE |
 | S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | s1 DONE (2026-10-25): STEP 0 gate EXIT 0, byte for byte the S5 log; probes P1 to P4 (4.4); Q-S6-1 to Q-S6-5 OPEN; docs only. s2 DONE (2026-10-25): Q-S6-1 to Q-S6-5 RULED (a) (section 11); the port of intent-lang 3df9d96 (its S9) over `Verdict`: `examples/tally.lang` (guest, L9, `verdictOf`, `Params`), `examples/ballot.lang` (kit), `test/ballottool.c`, `test/check/tally-leak.lang` (L10), 28 eval rows and 14 precompile rows (section 8). The dispute id def is `disputeId`: `dispute` is a domain constructor, so a def with that name gives `REFUSE_NAME` (rule R4). `make -B check` EXIT 0 with the S5 counters except 57 examples, 193 check refusals, 237 evals, 157 precompile steps, and 14 "regressions: passed" lines (+ `ballot regressions: passed`). O11 and O12 CLOSED. DONE |
 | S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 b1 DONE (2026-10-25): STEP 0 at the USER commit 29eaec4 (tree 80268401: the S7 s1 tree and a USER edit of the cast to four calls); the USER ruled Q-S7-1 to Q-S7-8 (a); the NUMBER port and the t8n route of intent-lang 79e1898 (4.7); gate EXIT 0 with the S7 s1 counters except 16 lower refusals, 33 lower checks and 44 evm steps. s2 b4 DONE (2026-10-25): STEP 0 at the USER commit 4571e84 (tree 25ab7a0d), gate byte for byte the b1 log; `u256Mul` and `u256Div` (Q-S7-7 (a), 4.7); gate EXIT 0 with the b1 counters except 243 evals and 27 emit regressions. s2 b3 DONE (2026-10-25): STEP 0 at the USER commit c418e33, gate byte for byte the b4 log; `Env.chain` and `Env.self` (Q-S7-6 (a), 4.7); gate EXIT 0 with the b4 counters except 58 examples, 247 evals, 9 runs, 14 run refusals and 48 evm steps. s2 b2 DONE (2026-10-25): STEP 0 at the USER commit 476d44a (tree aac47ee8: the b3 tree and a USER edit of `docs/host/README.md`), gate byte for byte the b3 log; the selected ring (Q-S7-3 (a), 4.7); gate EXIT 0 with the b3 counters except 59 examples, 253 evals, 163 precompile steps and the new line "selected ring: 2 rows, p2-elem runtime 16368 bytes". s2 DONE. s3a DONE (2026-10-25): STEP 0 at the USER commit e52bce8 (tree 011db849), gate byte for byte the s2 log; the size probe (4.7): the ring of Q-S7-5 (a) made the contract about 32 kB, over EIP-170; the USER ruled Q-S7-9 (a), the `flagIf` word memo of `src/lower.c`; gate EXIT 0 with the s2 counters except the line "selected ring: 2 rows, p2-elem runtime 15478 bytes" (was 16368). s3b part 1 DONE (2026-10-25): STEP 0 at the USER commit 77cd038 (tree 98737acb); the contract `examples/resolvekit.lang` (probe G, 24511 runtime bytes, 4.7); Q-S7-10 RULED; gate EXIT 0 with the s3a counters except 60 examples and 266 evals. USER commit 510c137 (the deadline snapshot fix: 24441 runtime bytes, 277 evals, 10 runs). s3b part 2 DONE (2026-10-25): `build/ballottool contract` (the words of polls 0 and 1, 4.7); 14 eval rows; gate EXIT 0 with the counters of 510c137 except 291 evals and "contract regressions: passed". s3c DONE (2026-10-25): STEP 0 at the USER commit 8b89bdd (tree c459a05e); `test/resolvekit.sh` (62 chain steps, the size rows: runtime 24441, initcode 24471, 4.7); gate EXIT 0 with the counters of 8b89bdd plus the 3 resolvekit lines. s4 DONE (2026-10-26): STEP 0 at the USER commit 149e8a3 (tree e4775581); `test/run/resolvekit.script` (49 rows: the tie, the L5 and the key image rows, the new layout of 4.7); `examples/ring.lang` without its clear `ballot` and `count`, `test/run/ring.script` with the two `take` rows (Q-S7-8 (a)); gate EXIT 0, byte for byte the log of 149e8a3. S7 DONE. |
-| S8 | mutants, SPEC, VALIDATION, close | s1 DONE (2026-10-26): STEP 0 at the USER commit a75a059 (tree 259e873c, the S7 s4 tree; the USER message, no Signed-off-by); gate EXIT 0, byte for byte the S7 s4 log; the mutant table M1 to M8 and the plan of SPEC, VALIDATION and STATUS (4.8); Q-S8-1 to Q-S8-7 RULED (a) (section 11); docs only. |
+| S8 | mutants, SPEC, VALIDATION, close | s1 DONE (2026-10-26): STEP 0 at the USER commit a75a059 (tree 259e873c, the S7 s4 tree; the USER message, no Signed-off-by); gate EXIT 0, byte for byte the S7 s4 log; the mutant table M1 to M8 and the plan of SPEC, VALIDATION and STATUS (4.8); Q-S8-1 to Q-S8-7 RULED (a) (section 11); docs only. s2 DONE (2026-10-26): STEP 0 at the USER commit 3972f71 (tree 921bde73: the s1 tree and the USER edit of the runner notes of 4.8), gate byte for byte the s1 log; the mutant runs (4.8): M1 to M7 KILLED by the S7 s4 rows, M8 survived; the kill rows of Q-S8-2 (a) and Q-S8-3 (a) (`test/ballottool.c` poll 1 with no mask, `test/run/resolvekit.{a1,chain,self}.script`, 3 chain steps, `test/run.sh` NAME.TAG; section 8); with the new rows M1 to M8 are all KILLED; gate EXIT 0 with the s1 counters except 13 runs and 65 chain steps. |
 
 ## 10. Open items
 

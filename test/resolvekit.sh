@@ -62,11 +62,12 @@ ws() {
 # hw NAME: the word NAME of tmp/words as hexnorm (a view result).
 hw() { hexnorm "$(ws "" "$1" | cut -c3- | tr -d u)"; }
 
-# sig Q V, slot Q V J, seal Q V: the arguments of the castSig, castSlot J and
-# castSeal calls of voter V in poll Q.
+# sig Q V [PREFIX], slot Q V J, seal Q V: the arguments of the castSig,
+# castSlot J and castSeal calls of voter V in poll Q (sig: the words PREFIX.*
+# when PREFIX is given, for example q1ab1).
 sig() {
   echo "$1u"
-  ws "q$1b$2" ix iy j0c1x j0c1y j0c2x j0c2y j1c1x j1c1y j1c2x j1c2y c1 s1 s2 s3
+  ws "${3:-q$1b$2}" ix iy j0c1x j0c1y j0c2x j0c2y j1c1x j1c1y j1c2x j1c2y c1 s1 s2 s3
 }
 slot() {
   echo "$1u"
@@ -196,6 +197,17 @@ call revert openTally 11 $(opening 0 t1)
 # = 20 in field 2 (the window after the pass of poll 0).
 caller=$member1
 mock
+# The domain (O10, Q-S8-2 (a)): the same take on chain 2, and with the runtime
+# at another address, reverts (here). The chain id of a BLOCK 0 step is the
+# chainId of the genesis config.
+config1=$config
+config=$(printf '%s' "$config1" | awk '{ sub(/"chainId":1,/, "\"chainId\":2,"); print }')
+call revert take 0 0u 0u 7u
+config=$config1
+receiver1=$receiver
+receiver=00000000000000000000000000000000000000c1
+call revert take 0 0u 0u 7u
+receiver=$receiver1
 call ok take 0 0u 0u 7u
 gasrow take
 paid "$receiver" 7
@@ -219,10 +231,12 @@ call "out 13" fieldOf 0 0u 6u
 call revert challenge 13 0u 0u
 
 # Poll 1: a cast after field 6 (BLOCK 20) reverts; voters 0 and 2 cast at
-# BLOCK 15.
+# BLOCK 15. The cast of a1 over the ring with no mask (q1ab1) reverts: slot 1
+# of the ring of poll 1 is nums 1 (L8, Q-S8-3 (a)).
 call revert castSig 20 $(sig 1 0)
 cast 1 0 15
 cast 1 2 15
+call revert castSig 15 $(sig 1 1 q1ab1)
 call "out 2" pollWord 0 1u 8u
 tally 1 t1
 

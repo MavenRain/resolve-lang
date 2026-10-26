@@ -7,11 +7,13 @@ runs=0
 tmp=${TMPDIR:-/tmp}/langc-run.$$
 mkdir -p "$tmp"
 
-# For each test/run/NAME.script, `langc run examples/NAME.lang` (examples/contract.lang
-# when there is no examples/NAME.lang) must exit 0 and print test/run/NAME.out
-# byte for byte.
+# For each test/run/NAME.script or NAME.TAG.script, `langc run examples/NAME.lang`
+# (examples/contract.lang when there is no examples/NAME.lang) must exit 0 and
+# print test/run/NAME.out (NAME.TAG.out) byte for byte. A script has one env
+# line, thus a second env of a program is a second script NAME.TAG (S8 s2).
 for script in test/run/*.script; do
-  prog=examples/$(basename "${script%.script}").lang
+  name=$(basename "${script%.script}")
+  prog=examples/${name%%.*}.lang
   [ -f "$prog" ] || prog=examples/contract.lang
   status=0
   build/langc --kit run "$prog" "$script" >"$tmp/out" 2>"$tmp/err" || status=$?

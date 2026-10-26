@@ -1,0 +1,3 @@
+-- The domain (O10, Q-S7-6 (a), Q-S8-2 (a)): the take of run row 1 of resolvekit.script on chain 2 reverts (here).
+env 2u 0x0000000000000000000000007265636569766572
+1 1u 0x00000000000000000000000000000000000000bb take 1u 0u 3u
