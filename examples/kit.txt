@@ -42,3 +42,4 @@ ledger.lang
 ring.lang
 ballot.lang
 resolvekit.lang
+table.lang

@@ -12,7 +12,7 @@ bytecode.
 
 resolve-lang comes from lang-template with the tcc-evm-contract host.
 
-Status (2026-10-26): the slices S0 to S8 of `docs/PLAN.md` are DONE, and
+Status (2026-10-26): the slices S0 to S9 of `docs/PLAN.md` are DONE, and
 the plan is CLOSED. The reference contract is `examples/resolvekit.lang`:
 two markets, the dispute, the encrypted ballots over a masked ring, the
 threshold open and the claim. `test/resolvekit.sh` runs it on an EVM chain

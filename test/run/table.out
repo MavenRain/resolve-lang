@@ -1,0 +1,16 @@
+1 record ok
+2 record ok
+3 record ok
+4 record ok
+5 record ok
+6 record revert
+7 bet ok
+8 bet revert
+9 bet ok
+10 bet revert
+11 bet ok
+12 bet revert
+13 bet ok
+14 bet revert
+15 bet revert
+state makeState 2u 4u

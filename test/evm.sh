@@ -143,6 +143,12 @@ numbered=0
 # test/run/chains.script (S7 s2, Q-S7-6 (a)): its env line gives chain id 1
 # and the receiver address, the CHAINID and ADDRESS of each step.
 chain examples/chains.lang test/run/chains.script
+# test/run/table.script (S9, PLAN 4.9): the generated market table on the EVM.
+# Its calls are t8n steps at NUMBER BLOCK (the deadlines), thus the caller is
+# the t8n key address. Markets.rule lowers each elim over a flagIf as an IF.
+numbered=1
+chain examples/table.lang test/run/table.script
+numbered=0
 
 rm -rf "$tmp"
 echo "evm steps: $steps checked"

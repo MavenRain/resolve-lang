@@ -286,9 +286,10 @@ The milestones are the slices of docs/PLAN.md section 9.
 | S6 | the encrypted dispute ballots over `Verdict`, L9, the threshold open, the majority; `Params` | DONE |
 | S7 | the contract writer for the entries of section 13; NUMBER, CHAINID and ADDRESS; `u256Mul` and `u256Div`; the chain test | DONE |
 | S8 | the mutants M1 to M8; this text, docs/VALIDATION.md, docs/STATUS.md; the close | DONE |
+| S9 | the market table from the `market` forms (`M.id`, `M.index`, `Markets.*`); the case of case lowering; `examples/resolvekit.lang` uses the table | DONE |
 
-Status (2026-10-26): S0 to S8 are DONE. The plan of docs/PLAN.md is
-CLOSED.
+Status (2026-10-26): S0 to S9 are DONE. The plan of docs/PLAN.md is
+CLOSED (S9).
 
 ## 11. The market form
 
@@ -324,6 +325,8 @@ program `def`, in this order:
 | `M.deadline` | `def M.deadline : U256 := T` |
 | `M.rule` | `def M.rule : M.Reading -> M.Outcome := T` |
 | `M.answers` | `def M.answers : (o : M.Outcome) -> Sigma (r : M.Reading) (Path M.Outcome (M.rule r) o) := T` |
+| `M.id` | `def M.id : U256 := iu`, where i is the position of the form among the market forms of the program (the first form is 0) |
+| `M.index` | `def M.index : M.Outcome -> U256`: `M.Lj` gives `(j-1)u` |
 
 The form makes no reading constructor: a branch of `answers` writes
 `pair`. The kernel has no eta rule for `Unit`, thus each branch does an
@@ -347,6 +350,38 @@ gives `REFUSE_LOWER` because it has no state or `init`.
 
 A diagnostic in a clause term gives the line in the generated text (the
 source `market M`), not the line in the program.
+
+### The market table (S9)
+
+After the defs of the last market form of the program, the checker
+generates the market table (docs/PLAN.md 4.9). N is the number of market
+forms. w is the largest number of sources of a market. Market i is the
+market form with `M.id` = iu.
+
+| Name | Generated text |
+|---|---|
+| `Markets.count` | `def Markets.count : U256 := Nu` |
+| `Markets.known` | `def Markets.known : U256 -> Flag`: `u256Le m (N-1)u` |
+| `Markets.deadline` | `def Markets.deadline : U256 -> U256`: the select chain on m of `M.deadline` |
+| `Markets.rule` | `def Markets.rule : U256 -> U256 -> ... -> U256` (m, then w reading words): the select chain on m of `M.index (M.rule R)`, where R is the `M.Reading` of the first n words |
+| `Markets.outcome` | `def Markets.outcome : U256 -> U256 -> Flag`: `u256Le o (k-1)u`, where k is the number of outcomes of market m |
+
+The select chain is `flagIf (u256Eq m 0u) X0 (flagIf (u256Eq m 1u) X1
+(... X(N-1)))`. The last market is the default, thus a caller guards
+with `Markets.known`. With one market, there is no branch.
+
+A program uses `Markets.*` only after the last market form. Before that
+form, the names are not defined. A program `def` with the name
+`Markets.x` gives `REFUSE_NAME`, as each program `def` with a `.`.
+
+`Markets.rule` applies `M.index`, a `Sum` `elim`, to a `flagIf`. When
+the condition is not a value, the kernel keeps this `elim` stuck. At a
+word position, the lowerer writes it as the IF over the condition of the
+`flagIf`, with the `elim` at each arm (case of case, docs/PLAN.md 4.9
+D3). The lowerer does this only for a stuck `elim` on a stuck `flagIf`.
+Each other stuck `elim` at a word position keeps the K4c refusal. The
+kernel does not check this step: `test/run/table.script` and its rows
+in `test/evm.sh` test it.
 
 ## 12. Contest, Verdict and the laws
 
@@ -385,12 +420,17 @@ outcomes have no path between them. A program defines the verdict
 
 ## 13. The contract
 
-The reference program is `examples/resolvekit.lang`. Its `known`,
-`deadlineOf` and `ruleOf` definitions explicitly encode a closed list of
-two markets: market 0 (deadline block 10) and market 1 (deadline block
-20). They copy the deadlines and rules of `examples/ledger.lang`; adding
-a `market` declaration requires wiring its definitions into the contract
-operations. The reference program has three members a0, a1 and a2, and
+The reference program is `examples/resolvekit.lang`. It declares its
+two markets with `market` forms: `Price` (market 0, `Above | Below`,
+deadline block 10, `Above` when 50 <= r) and `Depth` (market 1,
+`Low | High`, deadline block 20, `Low` when r <= 30). These are the
+deadlines and rules of `examples/ledger.lang`. Its `known`, `deadlineOf`
+and `ruleOf` definitions are `Markets.known`, `Markets.deadline` and
+`Markets.rule` (section 11), and `take` accepts an outcome o only when
+`Markets.outcome m o`. Thus the checker checks the `answers` clause of
+each market that the contract uses. The list of markets is closed when
+the program is compiled. The reference program has three members a0, a1
+and a2, and
 the asset at 0x...ee. `test/resolvekit.sh` runs its contract on an EVM chain
 (docs/VALIDATION.md, the last section).
 

@@ -158,9 +158,29 @@ def ringSlot : State -> U256 -> Addr -> Prod U256 U256 -> U256 -> Prod U256 U256
 def ringOf : State -> U256 -> List (Prod U256 U256) :=
   fun (s : State) (q : U256) => cons (ringSlot s q a0 (pair p0x p0y) 0u) (cons (ringSlot s q a1 (pair p1x p1y) 1u) (cons (ringSlot s q a2 (pair p2x p2y) 2u) nil))
 def here : Env -> Flag := fun (env : Env) => u256Eq (domainOf (chain env) (self env)) deployment
-def known : U256 -> Flag := fun (m : U256) => u256Le m 1u
-def deadlineOf : U256 -> U256 := fun (m : U256) => flagIf (u256Eq m 0u) 10u 20u
-def ruleOf : U256 -> U256 -> U256 := fun (m : U256) (r : U256) => flagIf (u256Eq m 0u) (flagIf (u256Le 50u r) 0u 1u) (flagIf (u256Le r 30u) 0u 1u)
+-- The two markets (S9, PLAN 4.9). Market 0 resolves to Above (0) when 50 <= r, market 1 to Low (0) when r <= 30.
+-- The forms generate Markets.known, deadline, rule and outcome: known, deadlineOf and ruleOf are that table.
+market Price :=
+  sources price
+  outcomes Above | Below
+  deadline 10u
+  rule fun (r : Price.Reading) => flagIf (u256Le 50u (Price.price r)) Price.Above Price.Below
+  answers fun (o : Price.Outcome) =>
+    elim (fun (x : Price.Outcome) => Sigma (r : Price.Reading) (Path Price.Outcome (Price.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Price.Reading) (Path Price.Outcome (Price.rule r) (inl v))) (pack 60u refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Price.Reading) (Path Price.Outcome (Price.rule r) (inr v))) (pack 10u refl) u) o
+market Depth :=
+  sources depth
+  outcomes Low | High
+  deadline 20u
+  rule fun (r : Depth.Reading) => flagIf (u256Le (Depth.depth r) 30u) Depth.Low Depth.High
+  answers fun (o : Depth.Outcome) =>
+    elim (fun (x : Depth.Outcome) => Sigma (r : Depth.Reading) (Path Depth.Outcome (Depth.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Depth.Reading) (Path Depth.Outcome (Depth.rule r) (inl v))) (pack 10u refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Depth.Reading) (Path Depth.Outcome (Depth.rule r) (inr v))) (pack 40u refl) u) o
+def known : U256 -> Flag := Markets.known
+def deadlineOf : U256 -> U256 := Markets.deadline
+def ruleOf : U256 -> U256 -> U256 := Markets.rule
 def poolKey : U256 -> U256 -> U256 := fun (m : U256) (o : U256) => hash (hash m 7u) o
 def field : State -> U256 -> U256 -> U256 := fun (s : State) (m : U256) (f : U256) => mapGet (marks s) (hash m f)
 def withBook : State -> Map U256 U256 -> State := fun (s : State) (b : Map U256 U256) => makeState (used s) (pend s) (stage s) (tally s) b (marks s) (disputeWindow s) (voteWindow s)
@@ -189,7 +209,7 @@ def sigOk : (s : State) -> (q u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 ix iy 
 -- Entry take m o x (L7): the stake of the caller in m (the stake test of the ring), its stake on o, the pool of o and the total pool grow by x.
 def take : (env : Env) -> (s : State) -> (m o x : U256) -> Option (Prod State (List Out)) :=
   fun (env : Env) (s : State) (m o x : U256) =>
-    flagIf (here env) (flagIf (known m) (flagIf (u256Le o 1u) (flagIf (u256Le (deadlineOf m) (block env)) none
+    flagIf (here env) (flagIf (known m) (flagIf (Markets.outcome m o) (flagIf (u256Le (deadlineOf m) (block env)) none
       (some (pair (withBook s (mapSet (mapSet (mapSet (mapSet (book s)
           (key m (caller env)) (u256Add (mapGet (book s) (key m (caller env))) x))
           (hash (key m (caller env)) o) (u256Add (mapGet (book s) (hash (key m (caller env)) o)) x))

@@ -30,3 +30,22 @@ def heatMild : Heat.Outcome := Heat.rule 20u
 def rainNo : Rain.Outcome := Rain.rule (pair 10u 20u)
 def heatHotReading : Heat.Reading := witness (Heat.answers Heat.Hot)
 def rainYesReading : Rain.Reading := witness (Rain.answers Rain.Yes)
+
+-- The market table (S9, PLAN 4.9) comes after the last market form. Closed
+-- definitions for the eval rows: Rain is market 0, Heat is market 1.
+def tableCount : U256 := Markets.count
+def tableKnown1 : Flag := Markets.known 1u
+def tableKnown2 : Flag := Markets.known 2u
+def tableDeadline0 : U256 := Markets.deadline 0u
+def tableDeadline1 : U256 := Markets.deadline 1u
+def tableRainYes : U256 := Markets.rule 0u 60u 20u
+def tableRainNo : U256 := Markets.rule 0u 10u 20u
+def tableHeatCold : U256 := Markets.rule 1u 5u 0u
+def tableHeatMild : U256 := Markets.rule 1u 20u 0u
+def tableHeatHot : U256 := Markets.rule 1u 30u 0u
+def tableRainIn : Flag := Markets.outcome 0u 1u
+def tableRainOut : Flag := Markets.outcome 0u 2u
+def tableHeatIn : Flag := Markets.outcome 1u 2u
+def tableHeatOut : Flag := Markets.outcome 1u 3u
+def heatId : U256 := Heat.id
+def heatMildIndex : U256 := Heat.index Heat.Mild

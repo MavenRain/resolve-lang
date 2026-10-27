@@ -973,6 +973,51 @@ items and the limits of docs/STATUS.md, and the status of README.md. No
 file in `src/`, `test/` or `examples/` changes. The close gate is byte for
 byte the STEP 0 log. The plan is CLOSED (S8 s3, 2026-10-26).
 
+### 4.9 The market table (S9)
+
+**The gap (S8).** A `market` form generated `M.deadline`, `M.rule` and
+`M.answers`, but no contract def used them. `examples/resolvekit.lang`
+wrote its market table by hand (`known`, `deadlineOf`, `ruleOf` and the
+outcome check of `take`). Thus the checker did not check the `answers`
+of the markets that the contract runs. A mutant of `ruleOf` (50u to 0u)
+gave `ok`.
+
+**The design (the USER asked for the build; no questions).**
+
+- D1. For each market M at the position i among the market forms of the
+  program, the checker also generates `def M.id : U256 := iu` and
+  `def M.index : M.Outcome -> U256` (the label Lj gives (j-1)u, a nested
+  `elim` with the motive `U256`), after `M.answers`.
+- D2. After the defs of the last market form, the checker generates the
+  table (SPEC.md section 11): `Markets.count`, `Markets.known`,
+  `Markets.deadline`, `Markets.rule` and `Markets.outcome`. A select
+  chain on m picks the market. The last market is the default, thus a
+  caller guards with `Markets.known`. A program uses `Markets.*` only
+  after the last market form.
+- D3. The lowerer only: at a word position, a stuck `elim` on a `Sum`
+  whose scrutinee is a stuck `flagIf c x y` lowers as the IF over c, with
+  the `elim` at x and at y (case of case: `lower_if_arms`, `elim_at` and
+  `is_elim_if` in `src/lower.c`). The evaluation and the conversion of the
+  kernel do not change. Each other stuck `elim` keeps the K4c refusal.
+- D4. `examples/resolvekit.lang` declares `Price` (market 0, deadline
+  10u, `Above` when 50 <= r, readings 60u and 10u) and `Depth` (market 1,
+  deadline 20u, `Low` when r <= 30, readings 10u and 40u) before `known`.
+  `known`, `deadlineOf` and `ruleOf` are `Markets.known`,
+  `Markets.deadline` and `Markets.rule`, and `take` checks
+  `Markets.outcome m o`.
+
+**The S9 result (2026-10-26).** STEP 0 at the USER commit 93ebeee (tree
+3b9a22a2): the gate is byte for byte the S8 s3 log. The tests: T1, 16
+eval rows on `examples/market.lang`; T2, `examples/table.lang` and
+`test/run/table.script` (15 calls on the host and on the EVM: readings
+on the two sides of each threshold, an unknown market, an unknown
+outcome and the deadlines); T3, `test/check/market-table-dead.lang`
+(`PATH_END`). The probes: the threshold mutant 50u to 0u in the `Price`
+form gives `PATH_END` on `Price.answers`. The same edit to `ruleOf` at
+93ebeee gives `ok`. The size rows do not change (runtime 24441 bytes,
+initcode 24471 bytes). The C source grows from 16767 to 16943 lines. The
+plan is CLOSED again (S9, 2026-10-26).
+
 ## 5. Laws
 
 | Law | Statement | How it holds |
@@ -1223,12 +1268,13 @@ Guest files under `test/check/` and `examples/`, `langc run` scripts under
 | S6 | encrypted dispute ballots: one-hot `Enc` over `Verdict`, `tallyEnc`, L9, threshold open, majority; `Params` in the DAO | s1 DONE (2026-10-25): STEP 0 gate EXIT 0, byte for byte the S5 log; probes P1 to P4 (4.4); Q-S6-1 to Q-S6-5 OPEN; docs only. s2 DONE (2026-10-25): Q-S6-1 to Q-S6-5 RULED (a) (section 11); the port of intent-lang 3df9d96 (its S9) over `Verdict`: `examples/tally.lang` (guest, L9, `verdictOf`, `Params`), `examples/ballot.lang` (kit), `test/ballottool.c`, `test/check/tally-leak.lang` (L10), 28 eval rows and 14 precompile rows (section 8). The dispute id def is `disputeId`: `dispute` is a domain constructor, so a def with that name gives `REFUSE_NAME` (rule R4). `make -B check` EXIT 0 with the S5 counters except 57 examples, 193 check refusals, 237 evals, 157 precompile steps, and 14 "regressions: passed" lines (+ `ballot regressions: passed`). O11 and O12 CLOSED. DONE |
 | S7 | the contract writer: the entries of section 7; `Env.block` lowered to NUMBER; chain rows | s1 DONE (2026-10-25): STEP 0 at the USER commit 251c1ca (tree 7bf06ac3: the S6 tree and the USER change of the canonical counts, 4.4); gate EXIT 0 with the S6 counters except 237 evals and 157 precompile steps (the USER rows); probes P1 to P5 (4.7); the port source is intent-lang 79e1898 (its S10); Q-S7-1 to Q-S7-8 OPEN; docs only. s2 b1 DONE (2026-10-25): STEP 0 at the USER commit 29eaec4 (tree 80268401: the S7 s1 tree and a USER edit of the cast to four calls); the USER ruled Q-S7-1 to Q-S7-8 (a); the NUMBER port and the t8n route of intent-lang 79e1898 (4.7); gate EXIT 0 with the S7 s1 counters except 16 lower refusals, 33 lower checks and 44 evm steps. s2 b4 DONE (2026-10-25): STEP 0 at the USER commit 4571e84 (tree 25ab7a0d), gate byte for byte the b1 log; `u256Mul` and `u256Div` (Q-S7-7 (a), 4.7); gate EXIT 0 with the b1 counters except 243 evals and 27 emit regressions. s2 b3 DONE (2026-10-25): STEP 0 at the USER commit c418e33, gate byte for byte the b4 log; `Env.chain` and `Env.self` (Q-S7-6 (a), 4.7); gate EXIT 0 with the b4 counters except 58 examples, 247 evals, 9 runs, 14 run refusals and 48 evm steps. s2 b2 DONE (2026-10-25): STEP 0 at the USER commit 476d44a (tree aac47ee8: the b3 tree and a USER edit of `docs/host/README.md`), gate byte for byte the b3 log; the selected ring (Q-S7-3 (a), 4.7); gate EXIT 0 with the b3 counters except 59 examples, 253 evals, 163 precompile steps and the new line "selected ring: 2 rows, p2-elem runtime 16368 bytes". s2 DONE. s3a DONE (2026-10-25): STEP 0 at the USER commit e52bce8 (tree 011db849), gate byte for byte the s2 log; the size probe (4.7): the ring of Q-S7-5 (a) made the contract about 32 kB, over EIP-170; the USER ruled Q-S7-9 (a), the `flagIf` word memo of `src/lower.c`; gate EXIT 0 with the s2 counters except the line "selected ring: 2 rows, p2-elem runtime 15478 bytes" (was 16368). s3b part 1 DONE (2026-10-25): STEP 0 at the USER commit 77cd038 (tree 98737acb); the contract `examples/resolvekit.lang` (probe G, 24511 runtime bytes, 4.7); Q-S7-10 RULED; gate EXIT 0 with the s3a counters except 60 examples and 266 evals. USER commit 510c137 (the deadline snapshot fix: 24441 runtime bytes, 277 evals, 10 runs). s3b part 2 DONE (2026-10-25): `build/ballottool contract` (the words of polls 0 and 1, 4.7); 14 eval rows; gate EXIT 0 with the counters of 510c137 except 291 evals and "contract regressions: passed". s3c DONE (2026-10-25): STEP 0 at the USER commit 8b89bdd (tree c459a05e); `test/resolvekit.sh` (62 chain steps, the size rows: runtime 24441, initcode 24471, 4.7); gate EXIT 0 with the counters of 8b89bdd plus the 3 resolvekit lines. s4 DONE (2026-10-26): STEP 0 at the USER commit 149e8a3 (tree e4775581); `test/run/resolvekit.script` (49 rows: the tie, the L5 and the key image rows, the new layout of 4.7); `examples/ring.lang` without its clear `ballot` and `count`, `test/run/ring.script` with the two `take` rows (Q-S7-8 (a)); gate EXIT 0, byte for byte the log of 149e8a3. S7 DONE. |
 | S8 | mutants, SPEC, VALIDATION, close | s1 DONE (2026-10-26): STEP 0 at the USER commit a75a059 (tree 259e873c, the S7 s4 tree; the USER message, no Signed-off-by); gate EXIT 0, byte for byte the S7 s4 log; the mutant table M1 to M8 and the plan of SPEC, VALIDATION and STATUS (4.8); Q-S8-1 to Q-S8-7 RULED (a) (section 11); docs only. s2 DONE (2026-10-26): STEP 0 at the USER commit 3972f71 (tree 921bde73: the s1 tree and the USER edit of the runner notes of 4.8), gate byte for byte the s1 log; the mutant runs (4.8): M1 to M7 KILLED by the S7 s4 rows, M8 survived; the kill rows of Q-S8-2 (a) and Q-S8-3 (a) (`test/ballottool.c` poll 1 with no mask, `test/run/resolvekit.{a1,chain,self}.script`, 3 chain steps, `test/run.sh` NAME.TAG; section 8); with the new rows M1 to M8 are all KILLED; gate EXIT 0 with the s1 counters except 13 runs and 65 chain steps. s3 DONE (2026-10-26): STEP 0 at the USER commit 9fec6af (tree b77d4b2b), gate byte for byte the s2 log; SPEC.md sections 1 and 9 to 16 (Q-S8-5 (a)), the resolution section of docs/VALIDATION.md (Q-S8-6 (a)), the S6 to S8 items and the limits of docs/STATUS.md, README.md; docs only; the close gate byte for byte the STEP 0 log. S8 DONE. |
+| S9 | the market table from checked `market` forms (4.9): `M.id`, `M.index`, `Markets.count`, `known`, `deadline`, `rule`, `outcome`; the case of case lowering (D3); `examples/resolvekit.lang` uses the table | DONE (2026-10-26): the USER asked for the build, no Qs (the builder readings D1 to D4, 4.9). STEP 0 at the USER commit 93ebeee (tree 3b9a22a2), gate byte for byte the S8 s3 log. D1 to D4 and T1 to T3 (4.9); `make -B check` EXIT 0 with the S8 counters except 61 examples, 194 check refusals, 307 evals, 14 runs and 63 evm steps; the size rows are the same (runtime 24441 bytes, initcode 24471 bytes). S9 DONE. |
 
 ## 10. Open items
 
 Each item is RULED (S1, 2026-10-24) or kept as the builder call.
 
-At the close (S8 s3, 2026-10-26): O11 and O12 are CLOSED. O6 (one dispute
+At the close (S8 s3, 2026-10-26, and again at S9): O11 and O12 are CLOSED. O6 (one dispute
 round) and O13 (`ecrecover` with no use) are limits of v1 (SPEC.md section
 16, docs/STATUS.md). Each other item is RULED or kept, and the build
 implements it.
@@ -1589,3 +1635,6 @@ for all").
   in v1: SPEC and STATUS record the `init` constant as a limit. (b) Build
   it in S8; if the contract goes over EIP-170, STOP and ask.
   RULED: (a).
+
+S9 (2026-10-26) has no questions: the USER asked for the build, and 4.9
+records the builder readings D1 to D4. The plan is CLOSED again.

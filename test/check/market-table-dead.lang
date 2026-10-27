@@ -1,0 +1,26 @@
+-- Two markets in a contract. The rule of B never gives No (0 <= r for each
+-- word r), thus the No branch of its answers has no reading: PATH_END (S9,
+-- PLAN 4.9). The check stops at B, before the market table.
+state State := makeState (last : U256) (seen : U256)
+def init : State := makeState 0u 0u
+market A :=
+  sources s
+  outcomes Yes | No
+  deadline 1u
+  rule fun (r : A.Reading) => flagIf (u256Le 50u (A.s r)) A.Yes A.No
+  answers fun (o : A.Outcome) =>
+    elim (fun (x : A.Outcome) => Sigma (r : A.Reading) (Path A.Outcome (A.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : A.Reading) (Path A.Outcome (A.rule r) (inl v))) (pack 60u refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : A.Reading) (Path A.Outcome (A.rule r) (inr v))) (pack 10u refl) u) o
+market B :=
+  sources s
+  outcomes Yes | No
+  deadline 2u
+  rule fun (r : B.Reading) => flagIf (u256Le 0u (B.s r)) B.Yes B.No
+  answers fun (o : B.Outcome) =>
+    elim (fun (x : B.Outcome) => Sigma (r : B.Reading) (Path B.Outcome (B.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : B.Reading) (Path B.Outcome (B.rule r) (inl v))) (pack 60u refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : B.Reading) (Path B.Outcome (B.rule r) (inr v))) (pack 10u refl) u) o
+def record : (env : Env) -> (s : State) -> (m r : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (m r : U256) =>
+    flagIf (Markets.known m) (some (pair (makeState (Markets.rule m r) (seen s)) nil)) none

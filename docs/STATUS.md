@@ -1,10 +1,11 @@
 # resolve-lang status
 
-The build implements all the slices of docs/PLAN.md section 9 (S0 to S8):
+The build implements all the slices of docs/PLAN.md section 9 (S0 to S9):
 the port of intent-lang, the `market` form, `Contest`, the ledger and the
 masked ring, the encrypted dispute ballots, and the resolution contract on
-an EVM chain. The plan is CLOSED (S8 s3, 2026-10-26). SPEC.md gives the
-language, and docs/VALIDATION.md gives the gate results.
+an EVM chain, and the market table of the `market` forms (S9). The plan
+is CLOSED again (S9, 2026-10-26). SPEC.md gives the language, and
+docs/VALIDATION.md gives the gate results.
 
 ## Implemented
 
@@ -95,10 +96,21 @@ language, and docs/VALIDATION.md gives the gate results.
   `test/run/resolvekit.a1.script` and one chain cast): 13 runs and 65
   chain steps. s3 wrote SPEC.md sections 1 and 9 to 16, the resolution
   section of docs/VALIDATION.md and this file.
+- S9 (the market table, PLAN 4.9): after the last `market` form, the
+  checker generates `M.id`, `M.index` and the table `Markets.count`,
+  `Markets.known`, `Markets.deadline`, `Markets.rule` and
+  `Markets.outcome` (SPEC.md section 11). The lowerer writes a stuck
+  `elim` on a stuck `flagIf` as an IF (case of case). The two markets of
+  `examples/resolvekit.lang` are `market` forms, and the contract uses
+  the table. 16 eval rows on `examples/market.lang`, the contract
+  `examples/table.lang` with `test/run/table.script` (15 calls, on the
+  host and on the EVM) and `test/check/market-table-dead.lang`
+  (`PATH_END`) test it: 14 runs and 63 evm steps. The size rows do not
+  change.
 
 ## Remaining M0 work
 
-None: the plan of docs/PLAN.md is CLOSED (S8).
+None: the plan of docs/PLAN.md is CLOSED (S9).
 
 ## Known limits
 
@@ -109,6 +121,13 @@ None: the plan of docs/PLAN.md is CLOSED (S8).
 - The size: the runtime of `examples/resolvekit.lang` is 24441 bytes, thus
   135 bytes of room are left under EIP-170 (24576 bytes).
 - O13: `ecrecover` comes with the port and has no use.
+- The market table (S9): a program can write a rule over the words by
+  hand and not use `Markets.rule`. The checker does not force an entry to
+  use the table. The list of markets is closed when the program is
+  compiled.
+- The case of case step of the lowerer (S9, PLAN 4.9 D3) is C code that
+  the kernel does not check. The run rows of `test/run/table.script` and
+  its EVM rows in `test/evm.sh` test it.
 - The non-goal of PLAN 4.3: a stake through another wallet, another venue
   or an off-chain hedge is outside the proof of L8.
 

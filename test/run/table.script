@@ -1,0 +1,20 @@
+-- A call script for examples/table.lang (S9, PLAN 4.9). test/evm.sh runs the
+-- calls as t8n steps at NUMBER BLOCK, thus the caller is the t8n key address.
+-- record: each rule on both sides of each threshold, then market 2 (not a
+-- market, a revert). bet: an outcome in and out of range for each market,
+-- each deadline (1000u, 2000u) one block before and at the deadline, market 2.
+1 1u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b record 0u 60u 20u
+2 2u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b record 0u 10u 20u
+3 3u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b record 1u 5u 0u
+4 4u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b record 1u 20u 0u
+5 5u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b record 1u 30u 0u
+6 6u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b record 2u 60u 20u
+7 7u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b bet 0u 1u
+8 8u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b bet 0u 2u
+9 9u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b bet 1u 2u
+10 10u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b bet 1u 3u
+999 999u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b bet 0u 0u
+1000 1000u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b bet 0u 0u
+1999 1999u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b bet 1u 0u
+2000 2000u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b bet 1u 0u
+2001 2001u 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b bet 2u 0u

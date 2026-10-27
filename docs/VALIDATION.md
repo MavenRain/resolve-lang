@@ -475,24 +475,25 @@ a later ballot is about 600461 gas.
 
 Gate counters at the close of each slice. S2 is the intent-lang S7 count
 (the port). The S3 to S7 values come from the rows of docs/PLAN.md section
-9. The S8 values are the S8 s3 STEP 0 log.
+9. The S8 values are the S8 s3 STEP 0 log. The S9 values are the S9
+gate log.
 
-| Counter | S2 | S3 | S4 | S5 | S6 | S7 | S8 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| examples | 49 | 51 | 53 | 55 | 57 | 60 | 60 |
-| parse refusals | 19 | 20 | 20 | 20 | 20 | 20 | 20 |
-| check refusals | 186 | 191 | 192 | 192 | 193 | 193 | 193 |
-| kit-only refusals | 22 | 23 | 23 | 23 | 23 | 23 | 23 |
-| evals | 188 | 194 | 198 | 209 | 237 | 291 | 291 |
-| runs | 5 | 6 | 6 | 8 | 8 | 10 | 13 |
-| run refusals | 10 | 11 | 11 | 11 | 11 | 14 | 14 |
-| lower refusals | 16 | 17 | 17 | 17 | 17 | 16 | 16 |
-| build checks | 33 | 34 | 34 | 34 | 34 | 33 | 33 |
-| evm steps | 43 | 43 | 43 | 43 | 43 | 48 | 48 |
-| precompile steps | 143 | 143 | 143 | 143 | 157 | 163 | 163 |
-| emit regressions | 24 | 24 | 24 | 24 | 24 | 27 | 27 |
-| "regressions: passed" lines | 13 | 13 | 13 | 13 | 14 | 15 | 15 |
-| resolvekit chain steps | | | | | | 62 | 65 |
+| Counter | S2 | S3 | S4 | S5 | S6 | S7 | S8 | S9 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| examples | 49 | 51 | 53 | 55 | 57 | 60 | 60 | 61 |
+| parse refusals | 19 | 20 | 20 | 20 | 20 | 20 | 20 | 20 |
+| check refusals | 186 | 191 | 192 | 192 | 193 | 193 | 193 | 194 |
+| kit-only refusals | 22 | 23 | 23 | 23 | 23 | 23 | 23 | 23 |
+| evals | 188 | 194 | 198 | 209 | 237 | 291 | 291 | 307 |
+| runs | 5 | 6 | 6 | 8 | 8 | 10 | 13 | 14 |
+| run refusals | 10 | 11 | 11 | 11 | 11 | 14 | 14 | 14 |
+| lower refusals | 16 | 17 | 17 | 17 | 17 | 16 | 16 | 16 |
+| build checks | 33 | 34 | 34 | 34 | 34 | 33 | 33 | 33 |
+| evm steps | 43 | 43 | 43 | 43 | 43 | 48 | 48 | 63 |
+| precompile steps | 143 | 143 | 143 | 143 | 157 | 163 | 163 | 163 |
+| emit regressions | 24 | 24 | 24 | 24 | 24 | 27 | 27 | 27 |
+| "regressions: passed" lines | 13 | 13 | 13 | 13 | 14 | 15 | 15 | 15 |
+| resolvekit chain steps | | | | | | 62 | 65 | 65 |
 
 The S8 mutants (docs/PLAN.md 4.8 has the rows that fail for each mutant).
 One mutant changes one law row of `examples/resolvekit.lang`. Each mutant
@@ -515,3 +516,33 @@ two domain rows (`test/run/resolvekit.chain.script`,
 (`test/run/resolvekit.a1.script` and one chain cast). With these rows, M1
 to M8 are all killed, and the a1 row kills M7 by the law, not only by the
 fixtures.
+
+## The market table (resolve-lang S9)
+
+S9 generates the market table from the `market` forms (SPEC.md section
+11, docs/PLAN.md 4.9). `examples/resolvekit.lang` declares its two
+markets, `Price` and `Depth`, with `market` forms. Its `known`,
+`deadlineOf`, `ruleOf` and the outcome check of `take` use the table.
+The 65 chain steps and the run rows of `test/run/resolvekit*.script`
+do not change.
+
+The S9 gate (`make -B check`, EXIT 0, 2026-10-26, the S9 changes on
+93ebeee) has these changes from the S8 counters. Each other counter is
+the same.
+
+| Counter | S8 | S9 | The new rows |
+| --- | --- | --- | --- |
+| examples | 60 | 61 | `examples/table.lang` |
+| check refusals | 193 | 194 | `test/check/market-table-dead.lang` (`PATH_END`) |
+| evals | 291 | 307 | 16 table rows on `examples/market.lang` |
+| runs | 13 | 14 | `test/run/table.script` |
+| evm steps | 48 | 63 | the 15 calls of `test/run/table.script` on the EVM |
+
+The size rows do not change: the runtime is 24441 bytes (135 bytes of
+room under EIP-170), and the initcode is 24471 bytes. The gas rows of
+the S9 gate log are the same as the S8 rows of the previous section.
+
+The probes of the gap: the threshold mutant 50u to 0u in the `Price`
+form gives `PATH_END` (`Price.answers: the path at i1 is inl unit, but
+the type needs inr unit`). The same edit to the `ruleOf` of 93ebeee, the
+table that was written by hand, gives `ok`.

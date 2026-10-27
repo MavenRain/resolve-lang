@@ -4514,10 +4514,39 @@ static int check_cofamily(Checker *c, const Decl *d) {
   return 1;
 }
 
+/* The type of the labels j..k-1 of a market with K outcomes: Unit for the
+   last label, else Sum Unit of the rest (S9). */
+static void outcome_tail_text(Text *t, size_t j, size_t k) {
+  size_t i;
+  for (i = j + 1u; i < k; i++)
+    text_add(t, i + 1u < k ? "Sum Unit (" : "Sum Unit ");
+  text_add(t, "Unit");
+  for (i = j + 2u; i < k; i++)
+    text_add(t, ")");
+}
+
+/* The body of M.index at the variable .tJ of the labels j..k-1 (S9, PLAN
+   4.9): label j gives ju, by one elim with the constant motive U256. */
+static void index_text(Text *t, size_t j, size_t k) {
+  unsigned long long u = (unsigned long long)j;
+  if (j + 1u >= k) {
+    text_add(t, "%lluu", u);
+    return;
+  }
+  text_add(t, "elim (fun (.x : ");
+  outcome_tail_text(t, j, k);
+  text_add(t, ") => U256) (fun (.u : Unit) => %lluu) (fun (.t%llu : ", u, u + 1u);
+  outcome_tail_text(t, j + 1u, k);
+  text_add(t, ") => ");
+  index_text(t, j + 1u, k);
+  text_add(t, ") .t%llu", u);
+}
+
 /* The text of the market D (resolve-lang S3, PLAN 4.6), in the order of
    the table there: M.Reading, M.si, M.Outcome, M.Lj, M.deadline, M.rule,
-   M.answers. */
-static void market_text(Text *t, const Decl *d) {
+   M.answers, then M.id (ID, its index among the market forms) and M.index
+   (S9, PLAN 4.9). */
+static void market_text(Text *t, const Decl *d, size_t id) {
   const char *mn = d->name;
   size_t n = d->param_count;
   size_t k = d->ctor_count;
@@ -4560,35 +4589,154 @@ static void market_text(Text *t, const Decl *d) {
   text_add(t, "def %s.rule : %s.Reading -> %s.Outcome := %.*s\n", mn, mn, mn, (int)d->clauses[1].len, d->clauses[1].text);
   text_add(t, "def %s.answers : (o : %s.Outcome) -> Sigma (r : %s.Reading) (Path %s.Outcome (%s.rule r) o) := %.*s\n",
            mn, mn, mn, mn, mn, (int)d->clauses[2].len, d->clauses[2].text);
+  text_add(t, "def %s.id : U256 := %lluu\n", mn, (unsigned long long)id);
+  text_add(t, "def %s.index : %s.Outcome -> U256 := fun (.t0 : %s.Outcome) => ", mn, mn, mn);
+  index_text(t, 0u, k);
+  text_add(t, "\n");
 }
 
-/* A market (resolve-lang S3, O4): the generated text, lexed with `.` as a
-   name character and checked as program definitions. A guest market gets
-   REFUSE_KIT from the U256 of M.Reading (Q-S3-1 (a)). */
-static int check_market(Checker *c, const Decl *d) {
+/* The number of market forms among the first COUNT declarations of DECLS. */
+static size_t markets_before(const DeclList *decls, size_t count) {
+  size_t n = 0;
+  size_t i;
+  for (i = 0; i < count && i < decls->count; i++)
+    n += decls->items[i].kind == DECL_MARKET ? 1u : 0u;
+  return n;
+}
+
+/* The three arms of the market table (S9, PLAN 4.9). */
+typedef enum { TABLE_DEADLINE, TABLE_RULE, TABLE_OUTCOME } TableArm;
+
+/* The arm ARM at the market D: its deadline; the index of its rule at the
+   reading of its first n words .r0 .. (U256 for n = 1, else the pairs of
+   M.Reading); or the test that .o names one of its k outcomes. */
+static void table_arm(Text *t, const Decl *d, TableArm arm) {
+  size_t n = d->param_count > 0u ? d->param_count : 1u;
+  size_t i;
+  switch (arm) {
+  case TABLE_DEADLINE:
+    text_add(t, "%s.deadline", d->name);
+    return;
+  case TABLE_RULE:
+    text_add(t, "%s.index (%s.rule", d->name, d->name);
+    for (i = 1; i < n; i++)
+      text_add(t, " (pair .r%llu", (unsigned long long)(i - 1u));
+    text_add(t, " .r%llu", (unsigned long long)(n - 1u));
+    for (i = 1; i < n; i++)
+      text_add(t, ")");
+    text_add(t, ")");
+    return;
+  case TABLE_OUTCOME:
+    text_add(t, "u256Le .o %lluu", (unsigned long long)(d->ctor_count > 0u ? d->ctor_count - 1u : 0u));
+    return;
+  }
+}
+
+/* The select chain on .m: market i at .m = iu, and the last market as the
+   default, so a caller guards with Markets.known. One market: no branch. */
+static void table_select(Text *t, const DeclList *decls, TableArm arm) {
+  size_t n = markets_before(decls, decls->count);
+  size_t id = 0;
+  size_t i;
+  for (i = 0; i < decls->count; i++)
+    if (decls->items[i].kind == DECL_MARKET) {
+      if (id + 1u < n)
+        text_add(t, "flagIf (u256Eq .m %lluu) (", (unsigned long long)id);
+      table_arm(t, &decls->items[i], arm);
+      if (id + 1u < n)
+        text_add(t, ") (");
+      id++;
+    }
+  for (i = 1; i < n; i++)
+    text_add(t, ")");
+}
+
+/* The market table of DECLS (S9, PLAN 4.9): Markets.count, known, deadline,
+   rule (the market id, then W reading words, W the largest source count) and
+   outcome. Outcome has no branch when all markets have the same k. */
+static void table_text(Text *t, const DeclList *decls) {
+  size_t n = markets_before(decls, decls->count);
+  const Decl *last = NULL;
+  size_t w = 1;
+  int same = 1;
+  size_t i;
+  for (i = 0; i < decls->count; i++)
+    if (decls->items[i].kind == DECL_MARKET) {
+      w = decls->items[i].param_count > w ? decls->items[i].param_count : w;
+      same = same && (last == NULL || last->ctor_count == decls->items[i].ctor_count);
+      last = &decls->items[i];
+    }
+  text_add(t, "def Markets.count : U256 := %lluu\n", (unsigned long long)n);
+  text_add(t, "def Markets.known : U256 -> Flag := fun (.m : U256) => u256Le .m %lluu\n", (unsigned long long)(n > 0u ? n - 1u : 0u));
+  text_add(t, "def Markets.deadline : U256 -> U256 := fun (.m : U256) => ");
+  table_select(t, decls, TABLE_DEADLINE);
+  text_add(t, "\ndef Markets.rule : U256 ->");
+  for (i = 0; i < w; i++)
+    text_add(t, " U256 ->");
+  text_add(t, " U256 := fun (.m : U256)");
+  for (i = 0; i < w; i++)
+    text_add(t, " (.r%llu : U256)", (unsigned long long)i);
+  text_add(t, " => ");
+  table_select(t, decls, TABLE_RULE);
+  text_add(t, "\ndef Markets.outcome : U256 -> U256 -> Flag := fun (.m : U256) (.o : U256) => ");
+  if (same && last != NULL)
+    table_arm(t, last, TABLE_OUTCOME);
+  else
+    table_select(t, decls, TABLE_OUTCOME);
+  text_add(t, "\n");
+}
+
+/* The generated text T of SOURCE, lexed with `.` as a name character and
+   checked as program definitions. */
+static int check_text(Checker *c, const char *source, const Text *t) {
   Machine *m = c->m;
-  size_t size = strlen(d->name) + 8u;
-  char *source = arena_alloc(m->arena, size);
-  Text t = {NULL, 0, 0};
   TokenList toks = {0};
   DeclList list = {NULL, 0, 0};
   size_t i;
-  if (source == NULL)
-    return FAIL(c, "OOM", "out of memory");
-  snprintf(source, size, "market %s", d->name);
-  market_text(&t, d);
-  t.cap = t.len + 1u;
-  t.len = 0;
-  t.text = arena_alloc(m->arena, t.cap);
-  if (t.text == NULL)
-    return FAIL(c, "OOM", "out of memory");
-  market_text(&t, d);
-  if (!lex_internal(m->arena, source, t.text, t.len, &toks, m->diag) || !parse_source(m->arena, source, ORIGIN_PROGRAM, &toks, &list, m->diag))
+  if (!lex_internal(m->arena, source, t->text, t->len, &toks, m->diag) || !parse_source(m->arena, source, ORIGIN_PROGRAM, &toks, &list, m->diag))
     return 0;
   for (i = 0; i < list.count; i++)
     if (!check_generated(c, &list.items[i]))
       return 0;
   return 1;
+}
+
+/* The market table, after the defs of the last market form (S9, D2). */
+static int check_table(Checker *c) {
+  Text t = {NULL, 0, 0};
+  table_text(&t, c->decls);
+  t.cap = t.len + 1u;
+  t.len = 0;
+  t.text = arena_alloc(c->m->arena, t.cap);
+  if (t.text == NULL)
+    return FAIL(c, "OOM", "out of memory");
+  table_text(&t, c->decls);
+  return check_text(c, "market table", &t);
+}
+
+/* A market (resolve-lang S3, O4): the generated text, lexed with `.` as a
+   name character and checked as program definitions. A guest market gets
+   REFUSE_KIT from the U256 of M.Reading (Q-S3-1 (a)). The last market form
+   also gets the market table (S9). */
+static int check_market(Checker *c, const Decl *d) {
+  Machine *m = c->m;
+  size_t size = strlen(d->name) + 8u;
+  char *source = arena_alloc(m->arena, size);
+  size_t id = markets_before(c->decls, c->decl_index);
+  Text t = {NULL, 0, 0};
+  if (source == NULL)
+    return FAIL(c, "OOM", "out of memory");
+  snprintf(source, size, "market %s", d->name);
+  market_text(&t, d, id);
+  t.cap = t.len + 1u;
+  t.len = 0;
+  t.text = arena_alloc(m->arena, t.cap);
+  if (t.text == NULL)
+    return FAIL(c, "OOM", "out of memory");
+  market_text(&t, d, id);
+  if (!check_text(c, source, &t))
+    return 0;
+  return id + 1u < markets_before(c->decls, c->decls->count) ? 1 : check_table(c);
 }
 
 static int check_decl(Checker *c, const Decl *d) {
@@ -4647,10 +4795,12 @@ int check_program(Arena *arena, const DeclList *decls, Machine *m, Diag *diag, C
     int cofamily = decls->items[i].kind == DECL_COFAMILY;
     ctors += decls->items[i].ctor_count + (cofamily ? fields + 1u : 0u);
     extra += cofamily ? 2u * fields + 8u : 0u;
-    /* A market with n sources and k outcomes elaborates to n + k + 5
-       definitions (resolve-lang S3). */
-    extra += decls->items[i].kind == DECL_MARKET ? decls->items[i].param_count + decls->items[i].ctor_count + 5u : 0u;
+    /* A market with n sources and k outcomes elaborates to n + k + 7
+       definitions (resolve-lang S3, S9). */
+    extra += decls->items[i].kind == DECL_MARKET ? decls->items[i].param_count + decls->items[i].ctor_count + 7u : 0u;
   }
+  /* The market table adds 5 definitions (S9). */
+  extra += markets_before(decls, decls->count) > 0u ? 5u : 0u;
   m->defs = arena_alloc(arena, (decls->count + extra + 1u) * sizeof *m->defs);
   m->families = arena_alloc(arena, (decls->count + extra + 1u) * sizeof *m->families);
   m->ctors = arena_alloc(arena, (ctors + 1u) * sizeof *m->ctors);

@@ -1,0 +1,45 @@
+-- The market table (S9, PLAN 4.9): the two market forms of examples/market.lang,
+-- then two entries over the generated Markets.known, Markets.deadline,
+-- Markets.rule and Markets.outcome. test/run/table.script calls them, and
+-- test/evm.sh runs the same calls on the EVM: there each elim over a flagIf
+-- in Markets.rule lowers as an IF.
+state State := makeState (last : U256) (seen : U256)
+
+-- The start state of `langc run`.
+def init : State := makeState 0u 0u
+
+market Rain :=
+  sources rainfall temp
+  outcomes Yes | No
+  deadline 1000u
+  rule fun (r : Rain.Reading) => flagIf (u256Le 50u (Rain.rainfall r)) Rain.Yes Rain.No
+  answers fun (o : Rain.Outcome) =>
+    elim (fun (x : Rain.Outcome) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) (inl v))) (pack (pair 60u 20u) refl) u)
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Rain.Reading) (Path Rain.Outcome (Rain.rule r) (inr v))) (pack (pair 10u 20u) refl) u) o
+
+-- Three outcomes: the inr case gets t : Sum Unit Unit and does one more elim.
+market Heat :=
+  sources degrees
+  outcomes Cold | Mild | Hot
+  deadline 2000u
+  rule fun (r : Heat.Reading) => flagIf (u256Le (Heat.degrees r) 10u) Heat.Cold (flagIf (u256Le (Heat.degrees r) 25u) Heat.Mild Heat.Hot)
+  answers fun (o : Heat.Outcome) =>
+    elim (fun (x : Heat.Outcome) => Sigma (r : Heat.Reading) (Path Heat.Outcome (Heat.rule r) x))
+      (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Heat.Reading) (Path Heat.Outcome (Heat.rule r) (inl v))) (pack 5u refl) u)
+      (fun (t : Sum Unit Unit) => elim (fun (y : Sum Unit Unit) => Sigma (r : Heat.Reading) (Path Heat.Outcome (Heat.rule r) (inr y)))
+        (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Heat.Reading) (Path Heat.Outcome (Heat.rule r) (inr (inl v)))) (pack 20u refl) u)
+        (fun (u : Unit) => elim (fun (v : Unit) => Sigma (r : Heat.Reading) (Path Heat.Outcome (Heat.rule r) (inr (inr v)))) (pack 30u refl) u) t) o
+
+-- Entry record m r0 r1: keep the outcome index of the reading of market m (Heat
+-- reads r0 only). Revert when m is not a market.
+def record : (env : Env) -> (s : State) -> (m r0 r1 : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (m r0 r1 : U256) =>
+    flagIf (Markets.known m) (some (pair (makeState (Markets.rule m r0 r1) (seen s)) nil)) none
+
+-- Entry bet m o: count one bet. Revert when m is not a market, when o is not an
+-- outcome of m, or when the deadline of m is at or before the block.
+def bet : (env : Env) -> (s : State) -> (m o : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (m o : U256) =>
+    flagIf (Markets.known m) (flagIf (Markets.outcome m o) (flagIf (u256Le (Markets.deadline m) (block env)) none
+      (some (pair (makeState (last s) (u256Add (seen s) 1u)) nil))) none) none

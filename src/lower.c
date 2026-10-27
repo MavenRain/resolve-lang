@@ -436,22 +436,46 @@ static int memo_add(Low *l, const Value *v, const IrStmt *stmt, uint32_t local);
 /* flagIf at a word position: an IF that sets one local in each branch. One
    IF per value per entry (S7 s3, Q-S7-9 (a)), as the curve memo: a second
    use in B, or in a block that runs after B, reads the local of the first
-   IF. A use in the other arm of an IF gets its own IF. */
-static const IrExpr *lower_if_value(Low *l, Stmts *b, const Value *v) {
+   IF. A use in the other arm of an IF gets its own IF. KEY is the value of
+   the memo, C the condition, X and Y the arms. */
+static const IrExpr *lower_if_arms(Low *l, Stmts *b, const Value *key, const Value *c, const Value *x, const Value *y) {
+  const Value *arm[2] = {x, y};
   for (size_t i = 0; i < l->memo_count; i++)
-    if (l->memo[i].value == v && block_has(b, l->memo[i].stmt)) return ir_local(l, l->memo[i].local);
-  const IrExpr *cond = lower_expr(l, b, v->args[0]);
+    if (l->memo[i].value == key && block_has(b, l->memo[i].stmt)) return ir_local(l, l->memo[i].local);
+  const IrExpr *cond = lower_expr(l, b, c);
   uint32_t local = l->locals++;
   Stmts arms[2] = {{NULL, 0, 0, b}, {NULL, 0, 0, b}};
   IrStmt *s = cond != NULL ? new_stmt(l, IR_STMT_IF) : NULL;
   for (int k = 0; s != NULL && k < 2; k++) {
-    if (!push_set(l, &arms[k], local, lower_expr(l, &arms[k], v->args[1 + k]))) s = NULL;
+    if (!push_set(l, &arms[k], local, lower_expr(l, &arms[k], arm[k]))) s = NULL;
   }
   if (s == NULL) return NULL;
   s->expr = cond;
   s->body = block_of(&arms[0]);
   s->otherwise = block_of(&arms[1]);
-  return push(l, b, s) && memo_add(l, v, s, local) ? ir_local(l, local) : NULL;
+  return push(l, b, s) && memo_add(l, key, s, local) ? ir_local(l, local) : NULL;
+}
+
+static const IrExpr *lower_if_value(Low *l, Stmts *b, const Value *v) {
+  return lower_if_arms(l, b, v, v->args[0], v->args[1], v->args[2]);
+}
+
+/* The Sum elim E at the scrutinee S, as eval.c reduce_elim: inl and inr take
+   their case, a trap is the trap, and any other S keeps E stuck. */
+static const Value *elim_at(Low *l, const Value *e, const Value *s) {
+  const Value *args[4] = {e->args[0], e->args[1], e->args[2], s};
+  if (s == NULL || s->kind == VAL_TRAP) return s;
+  if (val_is(s, OP_INL)) return apply_value(l->m, e->args[1], s->args[0]);
+  if (val_is(s, OP_INR)) return apply_value(l->m, e->args[2], s->args[0]);
+  return val_op(l->m, VAL_STUCK, OP_ELIM, 2u, 0u, args, 4u);
+}
+
+/* S9 (PLAN 4.9, D3): a stuck Sum elim over a stuck flagIf c x y. At a word
+   position it is the IF over c, with the elim at x and at y (case of case).
+   Only the lowerer does this; the kernel keeps the elim stuck. */
+static int is_elim_if(const Value *v) {
+  return is_op(v, OP_ELIM) && v->kind == VAL_STUCK && v->inst == 2u && v->field == 0u && v->argc == 4u &&
+         is_op(v->args[3], OP_FLAG_IF) && v->args[3]->kind == VAL_STUCK && v->args[3]->argc == 3u;
 }
 
 /* The eager IR cannot carry a trapped accumulator into the next iteration.
@@ -648,6 +672,8 @@ static const IrExpr *lower_expr(Low *l, Stmts *b, const Value *v) {
     return ir_sload(l, ir_binary(l, IR_OP_KECCAK, key, key != NULL ? ir_const(l, f) : NULL));
   }
   if (is_op(v, OP_FLAG_IF) && v->argc == 3) return lower_if_value(l, b, v);
+  if (is_elim_if(v))
+    return lower_if_arms(l, b, v, v->args[3]->args[0], elim_at(l, v, v->args[3]->args[1]), elim_at(l, v, v->args[3]->args[2]));
   if (is_op(v, OP_FOLD_LIST) && v->argc == 3 && field_of(v->args[2], 1u, &f) && form_at(l, f) == FORM_LIST)
     return lower_fold(l, b, v, f);
   for (size_t k = 0; v != NULL && v->argc == 2 && k < sizeof BINARY_OPS / sizeof BINARY_OPS[0]; k++)

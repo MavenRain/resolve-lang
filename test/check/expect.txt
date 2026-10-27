@@ -189,5 +189,6 @@ market-unanswerable.lang PATH_END
 market-dotted-def.lang REFUSE_NAME
 market-label-source.lang REFUSE_NAME
 market-guest.lang REFUSE_KIT
+market-table-dead.lang PATH_END
 contest-wrong-end.lang PATH_END
 tally-leak.lang REFUSE_LAW
